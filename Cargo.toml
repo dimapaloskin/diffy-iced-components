@@ -1,0 +1,22 @@
+[workspace]
+resolver = "3"
+members = ["crates/demo-app", "crates/iced-code-view"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+
+[workspace.dependencies]
+iced = { git = "https://github.com/iced-rs/iced", rev = "cf09909263c0b5a0ef43bbf4158a4843559cc8cb", default-features = false, features = [
+  "wgpu",
+  "advanced",
+  "canvas",
+  "tokio",
+] }
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = true
+panic = "abort"
