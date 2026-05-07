@@ -1,7 +1,7 @@
 use iced::advanced::graphics::text::{self, cosmic_text};
 
 use crate::layout::{LayoutKey, LayoutRequest};
-use crate::state::{CosmicLayoutPayload, LayoutCacheEntry, LayoutSnapshot};
+use crate::state::{CosmicLayoutPayload, LayoutCacheEntry, LayoutSnapshot, VisualLineSnapshot};
 
 pub(crate) struct LayoutEngine;
 
@@ -38,9 +38,26 @@ impl LayoutEngine {
     );
     buffer.shape_until_scroll(raw_font_system, false);
 
-    let (text_size, _) = text::measure(buffer);
+    let mut text_width: f32 = 0.0;
+    let mut text_height: f32 = 0.0;
+    let mut visual_lines = Vec::new();
 
-    let snapshot = LayoutSnapshot { text_size };
+    for run in buffer.layout_runs() {
+      text_width = text_width.max(run.line_w);
+      text_height += run.line_height;
+
+      visual_lines.push(VisualLineSnapshot {
+        source_line_index: run.line_i,
+        y: run.line_top,
+        height: run.line_height,
+        width: run.line_w,
+      });
+    }
+
+    let snapshot = LayoutSnapshot {
+      text_size: iced::Size::new(text_width, text_height),
+      visual_lines,
+    };
 
     let key = LayoutKey::from_request(&request);
 

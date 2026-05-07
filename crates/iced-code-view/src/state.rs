@@ -17,6 +17,14 @@ pub(crate) struct LayoutCacheEntry {
 
 pub(crate) struct LayoutSnapshot {
   pub(crate) text_size: iced::Size,
+  pub(crate) visual_lines: Vec<VisualLineSnapshot>,
+}
+
+pub(crate) struct VisualLineSnapshot {
+  pub(crate) source_line_index: usize,
+  pub(crate) y: f32,
+  pub(crate) height: f32,
+  pub(crate) width: f32,
 }
 
 pub(crate) struct CosmicLayoutPayload {
