@@ -3,10 +3,12 @@ use std::sync::Arc;
 use iced::advanced::graphics::text::cosmic_text;
 
 use crate::layout::LayoutKey;
+use crate::viewport::Viewport;
 
 #[derive(Default)]
 pub(crate) struct CodeViewState {
   pub(crate) line: Option<LayoutCacheEntry>,
+  pub(crate) viewport: Viewport,
 }
 
 pub(crate) struct LayoutCacheEntry {

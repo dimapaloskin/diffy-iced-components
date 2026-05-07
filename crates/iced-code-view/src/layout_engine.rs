@@ -26,7 +26,11 @@ impl LayoutEngine {
     let buffer = payload.buffer_mut();
 
     buffer.set_wrap(cosmic_text::Wrap::None);
-    buffer.set_size(None, None);
+    buffer.set_size(
+      Some(request.content_size.width),
+      Some(request.content_size.height),
+    );
+    buffer.set_scroll(cosmic_text::Scroll::new(0, 0.0, 0.0));
 
     let attrs = text::to_attributes(request.font);
 

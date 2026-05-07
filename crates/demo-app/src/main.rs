@@ -1,5 +1,5 @@
 use iced::widget::{column, container, text};
-use iced::{Element, Length, alignment};
+use iced::{Element, Length, alignment, padding};
 
 use iced_code_view::{CodeDocument, CodeView};
 
@@ -23,7 +23,9 @@ impl App {
     container(
       column![
         text("Hello there"),
-        CodeView::new(self.document.clone()).border_radius(iced::border::radius(0.0))
+        CodeView::new(self.document.clone())
+          .border_radius(iced::border::radius(12.0))
+          .padding(padding::all(10.0))
       ]
       .spacing(10.0),
     )

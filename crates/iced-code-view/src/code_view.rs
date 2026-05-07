@@ -12,9 +12,7 @@ use crate::layout::LayoutKey;
 use crate::layout::LayoutRequest;
 use crate::layout_engine::LayoutEngine;
 use crate::state::CodeViewState;
-
-// TODO: use real content padding
-const CONTENT_PADDING: f32 = 8.0;
+use crate::viewport::Viewport;
 
 pub struct CodeView {
   document: CodeDocument,
@@ -23,6 +21,7 @@ pub struct CodeView {
   font: iced::Font,
   font_size: f32,
   line_height: f32,
+  padding: iced::padding::Padding,
   border_radius: iced::border::Radius,
 }
 
@@ -35,6 +34,7 @@ impl CodeView {
       font: iced::Font::MONOSPACE,
       font_size: 16.0,
       line_height: 24.0,
+      padding: iced::padding::Padding::default(),
       border_radius: iced::border::Radius::default(),
     }
   }
@@ -68,6 +68,11 @@ impl CodeView {
     self.line_height = line_height;
     self
   }
+
+  pub fn padding(mut self, padding: iced::padding::Padding) -> Self {
+    self.padding = padding;
+    self
+  }
 }
 
 impl<Message, Theme, Renderer> Widget<Message, Theme, Renderer> for CodeView
@@ -94,11 +99,13 @@ where
   ) -> layout::Node {
     let state = tree.state.downcast_mut::<CodeViewState>();
     let resolved_size = limits.resolve(self.width, self.height, iced::Size::ZERO);
+    let viewport = Viewport::new(resolved_size, self.padding);
     let previous = state.line.take();
 
     let layout_request = LayoutRequest {
       document: &self.document,
-      width: resolved_size.width,
+      content_size: viewport.content_bounds.size(),
+      scroll_offset: viewport.scroll_offset,
       font: self.font,
       font_size: self.font_size,
       line_height: self.line_height,
@@ -113,6 +120,7 @@ where
     } else {
       previous
     };
+    state.viewport = viewport;
 
     layout::Node::new(resolved_size)
   }
@@ -144,8 +152,12 @@ where
     renderer.fill_quad(quad, iced::Color::BLACK);
 
     let bounds = layout.bounds();
-    if let (Some(entry), Some(clip_bounds)) = (&state.line, bounds.intersection(viewport)) {
-      let position = iced::Point::new(bounds.x + CONTENT_PADDING, bounds.y + CONTENT_PADDING);
+    let content_bounds = state.viewport.absolute_content_bounds(bounds);
+    if let (Some(entry), Some(clip_bounds)) = (&state.line, content_bounds.intersection(viewport)) {
+      let position = iced::Point::new(
+        content_bounds.x - state.viewport.scroll_offset.x,
+        content_bounds.y - state.viewport.scroll_offset.y,
+      );
 
       renderer.fill_raw(text::Raw {
         buffer: Arc::downgrade(entry.payload.buffer()),
