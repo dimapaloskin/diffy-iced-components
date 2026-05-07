@@ -7,28 +7,36 @@ use iced::advanced::graphics::text::Renderer as TextRendererTrait;
 use iced::advanced::widget;
 use iced::advanced::{layout, renderer::Renderer as RendererTrait, widget::Widget};
 
+use crate::document::CodeDocument;
+use crate::layout::LayoutKey;
+use crate::layout::LayoutRequest;
 use crate::layout_engine::LayoutEngine;
 use crate::state::CodeViewState;
 
+// TODO: use real content padding
+const CONTENT_PADDING: f32 = 8.0;
+
 pub struct CodeView {
+  document: CodeDocument,
   width: Length,
   height: Length,
+  font: iced::Font,
+  font_size: f32,
+  line_height: f32,
   border_radius: iced::border::Radius,
 }
 
-impl Default for CodeView {
-  fn default() -> Self {
+impl CodeView {
+  pub fn new(document: CodeDocument) -> Self {
     Self {
+      document,
       width: Length::Fill,
       height: Length::Fill,
+      font: iced::Font::MONOSPACE,
+      font_size: 16.0,
+      line_height: 24.0,
       border_radius: iced::border::Radius::default(),
     }
-  }
-}
-
-impl CodeView {
-  pub fn new() -> Self {
-    Self::default()
   }
 
   pub fn border_radius(mut self, border_radius: iced::border::Radius) -> Self {
@@ -43,6 +51,21 @@ impl CodeView {
 
   pub fn height(mut self, height: Length) -> Self {
     self.height = height;
+    self
+  }
+
+  pub fn font(mut self, font: iced::Font) -> Self {
+    self.font = font;
+    self
+  }
+
+  pub fn font_size(mut self, font_size: f32) -> Self {
+    self.font_size = font_size;
+    self
+  }
+
+  pub fn line_height(mut self, line_height: f32) -> Self {
+    self.line_height = line_height;
     self
   }
 }
@@ -72,7 +95,25 @@ where
     let state = tree.state.downcast_mut::<CodeViewState>();
     let resolved_size = limits.resolve(self.width, self.height, iced::Size::ZERO);
     let previous = state.line.take();
-    state.line = Some(LayoutEngine::build_or_update(resolved_size, previous));
+
+    let layout_request = LayoutRequest {
+      document: &self.document,
+      width: resolved_size.width,
+      font: self.font,
+      font_size: self.font_size,
+      line_height: self.line_height,
+    };
+
+    let key = LayoutKey::from_request(&layout_request);
+
+    let needs_rebuild = previous.as_ref().is_none_or(|p| p.key != key);
+
+    state.line = if needs_rebuild {
+      Some(LayoutEngine::build_or_update(layout_request, previous))
+    } else {
+      previous
+    };
+
     layout::Node::new(resolved_size)
   }
 
@@ -104,10 +145,7 @@ where
 
     let bounds = layout.bounds();
     if let (Some(entry), Some(clip_bounds)) = (&state.line, bounds.intersection(viewport)) {
-      let position = iced::Point::new(
-        bounds.x + entry.snapshot.text_origin.x,
-        bounds.y + entry.snapshot.text_origin.y,
-      );
+      let position = iced::Point::new(bounds.x + CONTENT_PADDING, bounds.y + CONTENT_PADDING);
 
       renderer.fill_raw(text::Raw {
         buffer: Arc::downgrade(entry.payload.buffer()),

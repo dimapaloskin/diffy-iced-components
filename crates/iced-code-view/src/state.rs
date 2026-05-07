@@ -2,19 +2,21 @@ use std::sync::Arc;
 
 use iced::advanced::graphics::text::cosmic_text;
 
+use crate::layout::LayoutKey;
+
 #[derive(Default)]
 pub(crate) struct CodeViewState {
   pub(crate) line: Option<LayoutCacheEntry>,
 }
 
 pub(crate) struct LayoutCacheEntry {
+  pub(crate) key: LayoutKey,
   pub(crate) snapshot: LayoutSnapshot,
   pub(crate) payload: CosmicLayoutPayload,
 }
 
 pub(crate) struct LayoutSnapshot {
   pub(crate) text_size: iced::Size,
-  pub(crate) text_origin: iced::Vector,
 }
 
 pub(crate) struct CosmicLayoutPayload {

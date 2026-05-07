@@ -1,12 +1,13 @@
 use iced::advanced::graphics::text::{self, cosmic_text};
 
+use crate::layout::{LayoutKey, LayoutRequest};
 use crate::state::{CosmicLayoutPayload, LayoutCacheEntry, LayoutSnapshot};
 
 pub(crate) struct LayoutEngine;
 
 impl LayoutEngine {
   pub(crate) fn build_or_update(
-    view_size: iced::Size,
+    request: LayoutRequest,
     previous: Option<LayoutCacheEntry>,
   ) -> LayoutCacheEntry {
     let mut font_system = text::font_system()
@@ -14,7 +15,7 @@ impl LayoutEngine {
       .expect("iced shared font system lock should not be poisoned");
 
     let raw_font_system = font_system.raw();
-    let metrics = cosmic_text::Metrics::new(16.0, 24.0);
+    let metrics = cosmic_text::Metrics::new(request.font_size, request.line_height);
 
     let mut payload = previous.map(|entry| entry.payload).unwrap_or_else(|| {
       let buffer = cosmic_text::Buffer::new(raw_font_system, metrics);
@@ -27,23 +28,26 @@ impl LayoutEngine {
     buffer.set_wrap(cosmic_text::Wrap::None);
     buffer.set_size(None, None);
 
-    let attrs = text::to_attributes(iced::Font::MONOSPACE);
+    let attrs = text::to_attributes(request.font);
 
-    buffer.set_text("Hello", &attrs, cosmic_text::Shaping::Advanced, None);
+    buffer.set_text(
+      request.document.text(),
+      &attrs,
+      cosmic_text::Shaping::Advanced,
+      None,
+    );
     buffer.shape_until_scroll(raw_font_system, false);
 
     let (text_size, _) = text::measure(buffer);
 
-    let text_origin = iced::Vector::new(
-      (view_size.width - text_size.width) / 2.0,
-      (view_size.height - text_size.height) / 2.0,
-    );
+    let snapshot = LayoutSnapshot { text_size };
 
-    let snapshot = LayoutSnapshot {
-      text_size,
-      text_origin,
-    };
+    let key = LayoutKey::from_request(&request);
 
-    LayoutCacheEntry { snapshot, payload }
+    LayoutCacheEntry {
+      key,
+      snapshot,
+      payload,
+    }
   }
 }

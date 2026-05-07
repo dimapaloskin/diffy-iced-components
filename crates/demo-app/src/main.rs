@@ -1,22 +1,29 @@
 use iced::widget::{column, container, text};
 use iced::{Element, Length, alignment};
 
-use iced_code_view::CodeView;
+use iced_code_view::{CodeDocument, CodeView};
 
 fn main() -> iced::Result {
-  iced::application(App::default, App::update, App::view).run()
+  iced::application(App::new, App::update, App::view).run()
 }
 
-#[derive(Default)]
-struct App {}
+struct App {
+  document: CodeDocument,
+}
 
 impl App {
+  fn new() -> Self {
+    Self {
+      document: CodeDocument::new("Hello\nthere!"),
+    }
+  }
+
   fn update(&mut self, _: ()) {}
   fn view(&self) -> Element<'_, ()> {
     container(
       column![
         text("Hello there"),
-        CodeView::new().border_radius(iced::border::radius(15.0))
+        CodeView::new(self.document.clone()).border_radius(iced::border::radius(0.0))
       ]
       .spacing(10.0),
     )
