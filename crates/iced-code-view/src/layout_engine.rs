@@ -6,7 +6,7 @@ use crate::state::{CosmicLayoutPayload, LayoutCacheEntry, LayoutSnapshot};
 pub(crate) struct LayoutEngine;
 
 impl LayoutEngine {
-  pub(crate) fn build_or_update(
+  pub(crate) fn rebuild(
     request: LayoutRequest,
     previous: Option<LayoutCacheEntry>,
   ) -> LayoutCacheEntry {

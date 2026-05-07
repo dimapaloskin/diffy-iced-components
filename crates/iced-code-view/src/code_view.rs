@@ -109,7 +109,7 @@ where
     let needs_rebuild = previous.as_ref().is_none_or(|p| p.key != key);
 
     state.line = if needs_rebuild {
-      Some(LayoutEngine::build_or_update(layout_request, previous))
+      Some(LayoutEngine::rebuild(layout_request, previous))
     } else {
       previous
     };
