@@ -1,5 +1,12 @@
 use crate::document::CodeDocument;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum WrapMode {
+  #[default]
+  NoWrap,
+  SoftWrap,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct LayoutKey {
   pub(crate) text_revision: u64,

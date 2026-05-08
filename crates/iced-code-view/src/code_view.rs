@@ -10,7 +10,9 @@ use iced::advanced::{layout, renderer::Renderer as RendererTrait, widget::Widget
 use crate::document::CodeDocument;
 use crate::layout::LayoutKey;
 use crate::layout::LayoutRequest;
+use crate::layout::WrapMode;
 use crate::layout_engine;
+use crate::policies::TabDisplayPolicy;
 use crate::state::CodeViewState;
 use crate::viewport::Viewport;
 
@@ -21,6 +23,8 @@ pub struct CodeView {
   font: iced::Font,
   font_size: f32,
   line_height: f32,
+  wrap_mode: WrapMode,
+  tab_display_policy: TabDisplayPolicy,
   padding: iced::padding::Padding,
   border_radius: iced::border::Radius,
 }
@@ -34,6 +38,8 @@ impl CodeView {
       font: iced::Font::MONOSPACE,
       font_size: 16.0,
       line_height: 24.0,
+      wrap_mode: WrapMode::default(),
+      tab_display_policy: TabDisplayPolicy::default(),
       padding: iced::padding::Padding::default(),
       border_radius: iced::border::Radius::default(),
     }
@@ -71,6 +77,16 @@ impl CodeView {
 
   pub fn padding(mut self, padding: iced::padding::Padding) -> Self {
     self.padding = padding;
+    self
+  }
+
+  pub fn wrap_mode(mut self, wrap_mode: WrapMode) -> Self {
+    self.wrap_mode = wrap_mode;
+    self
+  }
+
+  pub fn tab_display_policy(mut self, tab_display_policy: TabDisplayPolicy) -> Self {
+    self.tab_display_policy = tab_display_policy;
     self
   }
 }
