@@ -3,91 +3,87 @@ use iced::advanced::graphics::text::{self, cosmic_text};
 use crate::layout::{LayoutKey, LayoutRequest};
 use crate::state::{CosmicLayoutPayload, LayoutCacheEntry, LayoutSnapshot, VisualLineSnapshot};
 
-pub(crate) struct LayoutEngine;
+pub(crate) fn rebuild(
+  request: LayoutRequest,
+  previous: Option<LayoutCacheEntry>,
+) -> LayoutCacheEntry {
+  let mut font_system = text::font_system()
+    .write()
+    .expect("iced shared font system lock should not be poisoned");
 
-impl LayoutEngine {
-  pub(crate) fn rebuild(
-    request: LayoutRequest,
-    previous: Option<LayoutCacheEntry>,
-  ) -> LayoutCacheEntry {
-    let mut font_system = text::font_system()
-      .write()
-      .expect("iced shared font system lock should not be poisoned");
+  let needs_set_text = previous
+    .as_ref()
+    .is_none_or(|entry| entry.key.text_revision != request.document.id());
 
-    let needs_set_text = previous
-      .as_ref()
-      .is_none_or(|entry| entry.key.text_revision != request.document.id());
+  let needs_update_attrs = previous.as_ref().is_some_and(|entry| {
+    entry.key.text_revision == request.document.id() && entry.key.font != request.font
+  });
 
-    let needs_update_attrs = previous.as_ref().is_some_and(|entry| {
-      entry.key.text_revision == request.document.id() && entry.key.font != request.font
-    });
+  let raw_font_system = font_system.raw();
+  let metrics = cosmic_text::Metrics::new(request.font_size, request.line_height);
 
-    let raw_font_system = font_system.raw();
-    let metrics = cosmic_text::Metrics::new(request.font_size, request.line_height);
+  let mut payload = previous.map(|entry| entry.payload).unwrap_or_else(|| {
+    let buffer = cosmic_text::Buffer::new(raw_font_system, metrics);
 
-    let mut payload = previous.map(|entry| entry.payload).unwrap_or_else(|| {
-      let buffer = cosmic_text::Buffer::new(raw_font_system, metrics);
+    CosmicLayoutPayload::new(buffer)
+  });
 
-      CosmicLayoutPayload::new(buffer)
-    });
+  let buffer = payload.buffer_mut();
 
-    let buffer = payload.buffer_mut();
+  buffer.set_wrap(cosmic_text::Wrap::None);
+  buffer.set_metrics_and_size(
+    metrics,
+    Some(request.content_size.width),
+    Some(request.content_size.height),
+  );
+  buffer.set_scroll(cosmic_text::Scroll::new(
+    0,
+    request.scroll_offset.y,
+    request.scroll_offset.x,
+  ));
 
-    buffer.set_wrap(cosmic_text::Wrap::None);
-    buffer.set_metrics_and_size(
-      metrics,
-      Some(request.content_size.width),
-      Some(request.content_size.height),
+  let attrs = text::to_attributes(request.font);
+
+  if needs_set_text {
+    buffer.set_text(
+      request.document.text(),
+      &attrs,
+      cosmic_text::Shaping::Advanced,
+      None,
     );
-    buffer.set_scroll(cosmic_text::Scroll::new(
-      0,
-      request.scroll_offset.y,
-      request.scroll_offset.x,
-    ));
+  } else if needs_update_attrs {
+    update_plain_attrs(buffer, &attrs);
+  }
 
-    let attrs = text::to_attributes(request.font);
+  buffer.shape_until_scroll(raw_font_system, false);
 
-    if needs_set_text {
-      buffer.set_text(
-        request.document.text(),
-        &attrs,
-        cosmic_text::Shaping::Advanced,
-        None,
-      );
-    } else if needs_update_attrs {
-      update_plain_attrs(buffer, &attrs);
-    }
+  let mut text_width: f32 = 0.0;
+  let mut text_height: f32 = 0.0;
+  let mut visual_lines = Vec::new();
 
-    buffer.shape_until_scroll(raw_font_system, false);
+  for run in buffer.layout_runs() {
+    text_width = text_width.max(run.line_w);
+    text_height += run.line_height;
 
-    let mut text_width: f32 = 0.0;
-    let mut text_height: f32 = 0.0;
-    let mut visual_lines = Vec::new();
+    visual_lines.push(VisualLineSnapshot {
+      source_line_index: run.line_i,
+      y: run.line_top,
+      height: run.line_height,
+      width: run.line_w,
+    });
+  }
 
-    for run in buffer.layout_runs() {
-      text_width = text_width.max(run.line_w);
-      text_height += run.line_height;
+  let snapshot = LayoutSnapshot {
+    text_size: iced::Size::new(text_width, text_height),
+    visual_lines,
+  };
 
-      visual_lines.push(VisualLineSnapshot {
-        source_line_index: run.line_i,
-        y: run.line_top,
-        height: run.line_height,
-        width: run.line_w,
-      });
-    }
+  let key = LayoutKey::from_request(&request);
 
-    let snapshot = LayoutSnapshot {
-      text_size: iced::Size::new(text_width, text_height),
-      visual_lines,
-    };
-
-    let key = LayoutKey::from_request(&request);
-
-    LayoutCacheEntry {
-      key,
-      snapshot,
-      payload,
-    }
+  LayoutCacheEntry {
+    key,
+    snapshot,
+    payload,
   }
 }
 

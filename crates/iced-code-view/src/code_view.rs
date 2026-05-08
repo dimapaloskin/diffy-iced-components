@@ -10,7 +10,7 @@ use iced::advanced::{layout, renderer::Renderer as RendererTrait, widget::Widget
 use crate::document::CodeDocument;
 use crate::layout::LayoutKey;
 use crate::layout::LayoutRequest;
-use crate::layout_engine::LayoutEngine;
+use crate::layout_engine;
 use crate::state::CodeViewState;
 use crate::viewport::Viewport;
 
@@ -116,7 +116,7 @@ where
     let needs_rebuild = previous.as_ref().is_none_or(|p| p.key != key);
 
     state.line = if needs_rebuild {
-      Some(LayoutEngine::rebuild(layout_request, previous))
+      Some(layout_engine::rebuild(layout_request, previous))
     } else {
       previous
     };
