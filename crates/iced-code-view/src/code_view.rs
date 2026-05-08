@@ -91,6 +91,53 @@ where
     widget::tree::State::new(CodeViewState::default())
   }
 
+  fn update(
+    &mut self,
+    tree: &mut widget::Tree,
+    event: &iced::Event,
+    layout: layout::Layout<'_>,
+    cursor: iced::advanced::mouse::Cursor,
+    _renderer: &Renderer,
+    shell: &mut iced::advanced::Shell<'_, Message>,
+    _viewport: &iced::Rectangle,
+  ) {
+    use iced::mouse::{Event as MouseEvent, ScrollDelta};
+
+    // Handle wheel over the whole CodeView area, including padding.
+    // If text-only behavior is needed later, narrow this to the content bounds
+    if !cursor.is_over(layout.bounds()) {
+      return;
+    }
+
+    let iced::Event::Mouse(MouseEvent::WheelScrolled { delta }) = event else {
+      return;
+    };
+
+    // Stop wheel events at CodeView, so scrolling does not chain to a parent at edges.
+    // For web-like scroll chaining, move this inside the `state.viewport.scroll_offset != old` check
+    shell.capture_event();
+
+    let delta = match delta {
+      ScrollDelta::Pixels { x, y } => [*x, *y],
+      ScrollDelta::Lines { x, y } => {
+        let step = self.line_height * 3.0;
+        [*x * step, *y * step]
+      }
+    };
+
+    let state = tree.state.downcast_mut::<CodeViewState>();
+
+    let old = state.viewport.scroll_offset;
+
+    state.viewport.scroll_offset.x = (old.x - delta[0]).max(0.0);
+    state.viewport.scroll_offset.y = (old.y - delta[1]).max(0.0);
+
+    if state.viewport.scroll_offset != old {
+      shell.invalidate_layout();
+      shell.request_redraw();
+    }
+  }
+
   fn layout(
     &mut self,
     tree: &mut iced::advanced::widget::Tree,
@@ -99,7 +146,7 @@ where
   ) -> layout::Node {
     let state = tree.state.downcast_mut::<CodeViewState>();
     let resolved_size = limits.resolve(self.width, self.height, iced::Size::ZERO);
-    let viewport = Viewport::new(resolved_size, self.padding);
+    let viewport = Viewport::new(resolved_size, self.padding, state.viewport.scroll_offset);
     let previous = state.line.take();
 
     let layout_request = LayoutRequest {
@@ -114,8 +161,11 @@ where
     let key = LayoutKey::from_request(&layout_request);
 
     let needs_rebuild = previous.as_ref().is_none_or(|p| p.key != key);
+    let needs_scroll_sync = previous
+      .as_ref()
+      .is_some_and(|p| p.scroll_offset != viewport.scroll_offset);
 
-    state.line = if needs_rebuild {
+    state.line = if needs_rebuild || needs_scroll_sync {
       Some(layout_engine::rebuild(layout_request, previous))
     } else {
       previous
@@ -156,7 +206,7 @@ where
     if let (Some(entry), Some(clip_bounds)) = (&state.line, content_bounds.intersection(viewport)) {
       let position = iced::Point::new(
         content_bounds.x - state.viewport.scroll_offset.x,
-        content_bounds.y - state.viewport.scroll_offset.y,
+        content_bounds.y,
       );
 
       renderer.fill_raw(text::Raw {

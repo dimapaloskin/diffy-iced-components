@@ -36,11 +36,11 @@ pub(crate) fn rebuild(
     Some(request.content_size.width),
     Some(request.content_size.height),
   );
-  buffer.set_scroll(cosmic_text::Scroll::new(
-    0,
-    request.scroll_offset.y,
-    request.scroll_offset.x,
-  ));
+
+  // `layout_runs()` accounts for `Scroll::vertical` when choosing visible lines,
+  // but glyph `x` positions stay relative to the start of each line.
+  // Keep horizontal at zero here and apply `scroll_offset.x` in draw translation
+  buffer.set_scroll(cosmic_text::Scroll::new(0, request.scroll_offset.y, 0.0));
 
   let attrs = text::to_attributes(request.font);
 
@@ -84,6 +84,7 @@ pub(crate) fn rebuild(
     key,
     snapshot,
     payload,
+    scroll_offset: request.scroll_offset,
   }
 }
 

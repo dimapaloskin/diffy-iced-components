@@ -15,6 +15,7 @@ pub(crate) struct LayoutCacheEntry {
   pub(crate) key: LayoutKey,
   pub(crate) snapshot: LayoutSnapshot,
   pub(crate) payload: CosmicLayoutPayload,
+  pub(crate) scroll_offset: iced::Vector,
 }
 
 pub(crate) struct LayoutSnapshot {

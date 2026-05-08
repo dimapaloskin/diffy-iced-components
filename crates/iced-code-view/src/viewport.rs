@@ -6,7 +6,11 @@ pub(crate) struct Viewport {
 }
 
 impl Viewport {
-  pub(crate) fn new(widget_size: iced::Size, padding: iced::padding::Padding) -> Self {
+  pub(crate) fn new(
+    widget_size: iced::Size,
+    padding: iced::padding::Padding,
+    scroll_offset: iced::Vector,
+  ) -> Self {
     let width = (widget_size.width - padding.left - padding.right).max(0.0);
     let height = (widget_size.height - padding.top - padding.bottom).max(0.0);
 
@@ -18,7 +22,7 @@ impl Viewport {
         width,
         height,
       },
-      scroll_offset: iced::Vector::ZERO,
+      scroll_offset,
     }
   }
 
