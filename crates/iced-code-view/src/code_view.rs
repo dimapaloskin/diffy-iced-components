@@ -152,7 +152,7 @@ where
       .clamp_offset(candidate, state.viewport.content_bounds.size());
 
     if state.viewport.scroll_offset != old {
-      if let Some(entry) = &mut state.line {
+      if let Some(entry) = &mut state.layout_entry {
         layout_engine::sync_scroll(entry, state.viewport.scroll_offset);
       }
 
@@ -174,7 +174,7 @@ where
     let scroll_offset =
       scroll_extent.clamp_offset(viewport.scroll_offset, viewport.content_bounds.size());
     let viewport = viewport.with_scroll_offset(scroll_offset);
-    let previous = state.line.take();
+    let previous = state.layout_entry.take();
 
     let layout_request = LayoutRequest {
       document: &self.document,
@@ -194,8 +194,8 @@ where
       .as_ref()
       .is_some_and(|p| p.scroll_offset != viewport.scroll_offset);
 
-    state.line = if needs_rebuild || needs_scroll_sync {
-      Some(layout_engine::rebuild(layout_request, previous))
+    state.layout_entry = if needs_rebuild || needs_scroll_sync {
+      Some(layout_engine::rebuild_layout(layout_request, previous))
     } else {
       previous
     };
@@ -234,7 +234,9 @@ where
 
     let bounds = layout.bounds();
     let content_bounds = state.viewport.absolute_content_bounds(bounds);
-    if let (Some(entry), Some(clip_bounds)) = (&state.line, content_bounds.intersection(viewport)) {
+    if let (Some(entry), Some(clip_bounds)) =
+      (&state.layout_entry, content_bounds.intersection(viewport))
+    {
       let position = iced::Point::new(
         content_bounds.x - state.viewport.scroll_offset.x,
         content_bounds.y,

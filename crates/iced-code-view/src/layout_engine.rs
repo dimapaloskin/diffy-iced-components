@@ -3,7 +3,7 @@ use iced::advanced::graphics::text::{self, cosmic_text};
 use crate::layout::{LayoutKey, LayoutRequest};
 use crate::state::{CosmicLayoutPayload, LayoutCacheEntry, LayoutSnapshot, VisualLineSnapshot};
 
-pub(crate) fn rebuild(
+pub(crate) fn rebuild_layout(
   request: LayoutRequest,
   previous: Option<LayoutCacheEntry>,
 ) -> LayoutCacheEntry {

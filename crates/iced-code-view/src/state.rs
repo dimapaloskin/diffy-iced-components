@@ -8,7 +8,7 @@ use crate::viewport::Viewport;
 
 #[derive(Default)]
 pub(crate) struct CodeViewState {
-  pub(crate) line: Option<LayoutCacheEntry>,
+  pub(crate) layout_entry: Option<LayoutCacheEntry>,
   pub(crate) viewport: Viewport,
   pub(crate) scroll_extent: ScrollExtent,
 }
