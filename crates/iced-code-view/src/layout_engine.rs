@@ -59,12 +59,12 @@ pub(crate) fn rebuild_layout(
     key,
     snapshot,
     payload,
-    scroll_offset: request.scroll_offset,
+    prepared_scroll_offset: request.scroll_offset,
   }
 }
 
 pub(crate) fn sync_scroll(entry: &mut LayoutCacheEntry, scroll_offset: iced::Vector) {
-  if entry.scroll_offset == scroll_offset {
+  if entry.prepared_scroll_offset == scroll_offset {
     return;
   }
 
@@ -76,7 +76,7 @@ pub(crate) fn sync_scroll(entry: &mut LayoutCacheEntry, scroll_offset: iced::Vec
   let buffer = entry.payload.buffer_mut();
 
   entry.snapshot = sync_buffer_scroll_and_snapshot(buffer, raw_font_system, scroll_offset);
-  entry.scroll_offset = scroll_offset;
+  entry.prepared_scroll_offset = scroll_offset;
 }
 
 fn sync_buffer_scroll_and_snapshot(

@@ -192,7 +192,7 @@ where
     let needs_rebuild = previous.as_ref().is_none_or(|p| p.key != key);
     let needs_scroll_sync = previous
       .as_ref()
-      .is_some_and(|p| p.scroll_offset != viewport.scroll_offset);
+      .is_some_and(|p| p.prepared_scroll_offset != viewport.scroll_offset);
 
     state.layout_entry = if needs_rebuild || needs_scroll_sync {
       Some(layout_engine::rebuild_layout(layout_request, previous))

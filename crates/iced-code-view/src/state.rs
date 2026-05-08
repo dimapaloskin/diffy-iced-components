@@ -17,7 +17,9 @@ pub(crate) struct LayoutCacheEntry {
   pub(crate) key: LayoutKey,
   pub(crate) snapshot: LayoutSnapshot,
   pub(crate) payload: CosmicLayoutPayload,
-  pub(crate) scroll_offset: iced::Vector,
+  // The real scroll offset lives in Viewport.
+  // This is just the offset already applied to this buffer/snapshot.
+  pub(crate) prepared_scroll_offset: iced::Vector,
 }
 
 pub(crate) struct LayoutSnapshot {
