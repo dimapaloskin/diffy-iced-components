@@ -14,6 +14,14 @@ impl LayoutEngine {
       .write()
       .expect("iced shared font system lock should not be poisoned");
 
+    let needs_set_text = previous
+      .as_ref()
+      .is_none_or(|entry| entry.key.text_revision != request.document.id());
+
+    let needs_update_attrs = previous.as_ref().is_some_and(|entry| {
+      entry.key.text_revision == request.document.id() && entry.key.font != request.font
+    });
+
     let raw_font_system = font_system.raw();
     let metrics = cosmic_text::Metrics::new(request.font_size, request.line_height);
 
@@ -26,20 +34,30 @@ impl LayoutEngine {
     let buffer = payload.buffer_mut();
 
     buffer.set_wrap(cosmic_text::Wrap::None);
-    buffer.set_size(
+    buffer.set_metrics_and_size(
+      metrics,
       Some(request.content_size.width),
       Some(request.content_size.height),
     );
-    buffer.set_scroll(cosmic_text::Scroll::new(0, 0.0, 0.0));
+    buffer.set_scroll(cosmic_text::Scroll::new(
+      0,
+      request.scroll_offset.y,
+      request.scroll_offset.x,
+    ));
 
     let attrs = text::to_attributes(request.font);
 
-    buffer.set_text(
-      request.document.text(),
-      &attrs,
-      cosmic_text::Shaping::Advanced,
-      None,
-    );
+    if needs_set_text {
+      buffer.set_text(
+        request.document.text(),
+        &attrs,
+        cosmic_text::Shaping::Advanced,
+        None,
+      );
+    } else if needs_update_attrs {
+      update_plain_attrs(buffer, &attrs);
+    }
+
     buffer.shape_until_scroll(raw_font_system, false);
 
     let mut text_width: f32 = 0.0;
@@ -70,5 +88,11 @@ impl LayoutEngine {
       snapshot,
       payload,
     }
+  }
+}
+
+fn update_plain_attrs(buffer: &mut cosmic_text::Buffer, attrs: &cosmic_text::Attrs<'_>) {
+  for line in &mut buffer.lines {
+    line.set_attrs_list(cosmic_text::AttrsList::new(attrs));
   }
 }
