@@ -30,17 +30,13 @@ pub(crate) fn rebuild(
 
   let buffer = payload.buffer_mut();
 
-  buffer.set_wrap(cosmic_text::Wrap::None);
+  buffer.set_wrap(request.wrap_mode.to_cosmic());
   buffer.set_metrics_and_size(
     metrics,
     Some(request.content_size.width),
     Some(request.content_size.height),
   );
-
-  // `layout_runs()` accounts for `Scroll::vertical` when choosing visible lines,
-  // but glyph `x` positions stay relative to the start of each line.
-  // Keep horizontal at zero here and apply `scroll_offset.x` in draw translation
-  buffer.set_scroll(cosmic_text::Scroll::new(0, request.scroll_offset.y, 0.0));
+  buffer.set_tab_width(request.tab_policy.spaces_per_tab().into());
 
   let attrs = text::to_attributes(request.font);
 
@@ -55,8 +51,49 @@ pub(crate) fn rebuild(
     update_plain_attrs(buffer, &attrs);
   }
 
-  buffer.shape_until_scroll(raw_font_system, false);
+  let snapshot = sync_buffer_scroll_and_snapshot(buffer, raw_font_system, request.scroll_offset);
 
+  let key = LayoutKey::from_request(&request);
+
+  LayoutCacheEntry {
+    key,
+    snapshot,
+    payload,
+    scroll_offset: request.scroll_offset,
+  }
+}
+
+pub(crate) fn sync_scroll(entry: &mut LayoutCacheEntry, scroll_offset: iced::Vector) {
+  if entry.scroll_offset == scroll_offset {
+    return;
+  }
+
+  let mut font_system = text::font_system()
+    .write()
+    .expect("iced shared font system lock should not be poisoned");
+
+  let raw_font_system = font_system.raw();
+  let buffer = entry.payload.buffer_mut();
+
+  entry.snapshot = sync_buffer_scroll_and_snapshot(buffer, raw_font_system, scroll_offset);
+  entry.scroll_offset = scroll_offset;
+}
+
+fn sync_buffer_scroll_and_snapshot(
+  buffer: &mut cosmic_text::Buffer,
+  font_system: &mut cosmic_text::FontSystem,
+  scroll_offset: iced::Vector,
+) -> LayoutSnapshot {
+  // `layout_runs()` accounts for `Scroll::vertical` when choosing visible lines,
+  // but glyph `x` positions stay relative to the start of each line.
+  // Keep horizontal at zero here and apply `scroll_offset.x` in draw translation.
+  buffer.set_scroll(cosmic_text::Scroll::new(0, scroll_offset.y, 0.0));
+  buffer.shape_until_scroll(font_system, false);
+
+  snapshot_from_buffer(buffer)
+}
+
+fn snapshot_from_buffer(buffer: &cosmic_text::Buffer) -> LayoutSnapshot {
   let mut text_width: f32 = 0.0;
   let mut text_height: f32 = 0.0;
   let mut visual_lines = Vec::new();
@@ -73,18 +110,9 @@ pub(crate) fn rebuild(
     });
   }
 
-  let snapshot = LayoutSnapshot {
+  LayoutSnapshot {
     text_size: iced::Size::new(text_width, text_height),
     visual_lines,
-  };
-
-  let key = LayoutKey::from_request(&request);
-
-  LayoutCacheEntry {
-    key,
-    snapshot,
-    payload,
-    scroll_offset: request.scroll_offset,
   }
 }
 

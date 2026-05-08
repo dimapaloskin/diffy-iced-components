@@ -3,12 +3,14 @@ use std::sync::Arc;
 use iced::advanced::graphics::text::cosmic_text;
 
 use crate::layout::LayoutKey;
+use crate::scroll::ScrollExtent;
 use crate::viewport::Viewport;
 
 #[derive(Default)]
 pub(crate) struct CodeViewState {
   pub(crate) line: Option<LayoutCacheEntry>,
   pub(crate) viewport: Viewport,
+  pub(crate) scroll_extent: ScrollExtent,
 }
 
 pub(crate) struct LayoutCacheEntry {

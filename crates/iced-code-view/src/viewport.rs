@@ -34,4 +34,9 @@ impl Viewport {
       height: self.content_bounds.height,
     }
   }
+
+  pub(crate) fn with_scroll_offset(mut self, scroll_offset: iced::Vector) -> Self {
+    self.scroll_offset = scroll_offset;
+    self
+  }
 }

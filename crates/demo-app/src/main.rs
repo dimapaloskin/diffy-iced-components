@@ -74,8 +74,7 @@ impl App {
     .align_y(alignment::Vertical::Center)
     .into()
   }
-}
-"#;
+}"#;
 
 fn main() -> iced::Result {
   iced::application(App::new, App::update, App::view).run()
@@ -99,7 +98,7 @@ impl App {
         text("Hello there"),
         CodeView::new(self.document.clone())
           .border_radius(iced::border::radius(12.0))
-          .padding(padding::all(10.0))
+          .padding(padding::horizontal(10.0))
       ]
       .spacing(10.0),
     )

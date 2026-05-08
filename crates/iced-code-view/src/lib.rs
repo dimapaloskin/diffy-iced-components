@@ -3,6 +3,7 @@ mod document;
 mod layout;
 mod layout_engine;
 mod policies;
+mod scroll;
 mod state;
 mod viewport;
 

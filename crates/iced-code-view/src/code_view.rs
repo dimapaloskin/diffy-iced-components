@@ -13,6 +13,7 @@ use crate::layout::LayoutRequest;
 use crate::layout::WrapMode;
 use crate::layout_engine;
 use crate::policies::TabDisplayPolicy;
+use crate::scroll::ScrollExtent;
 use crate::state::CodeViewState;
 use crate::viewport::Viewport;
 
@@ -145,11 +146,16 @@ where
 
     let old = state.viewport.scroll_offset;
 
-    state.viewport.scroll_offset.x = (old.x - delta[0]).max(0.0);
-    state.viewport.scroll_offset.y = (old.y - delta[1]).max(0.0);
+    let candidate = iced::Vector::new(old.x - delta[0], old.y - delta[1]);
+    state.viewport.scroll_offset = state
+      .scroll_extent
+      .clamp_offset(candidate, state.viewport.content_bounds.size());
 
     if state.viewport.scroll_offset != old {
-      shell.invalidate_layout();
+      if let Some(entry) = &mut state.line {
+        layout_engine::sync_scroll(entry, state.viewport.scroll_offset);
+      }
+
       shell.request_redraw();
     }
   }
@@ -163,6 +169,11 @@ where
     let state = tree.state.downcast_mut::<CodeViewState>();
     let resolved_size = limits.resolve(self.width, self.height, iced::Size::ZERO);
     let viewport = Viewport::new(resolved_size, self.padding, state.viewport.scroll_offset);
+    let scroll_extent =
+      ScrollExtent::for_document(&self.document, self.wrap_mode, self.line_height);
+    let scroll_offset =
+      scroll_extent.clamp_offset(viewport.scroll_offset, viewport.content_bounds.size());
+    let viewport = viewport.with_scroll_offset(scroll_offset);
     let previous = state.line.take();
 
     let layout_request = LayoutRequest {
@@ -172,6 +183,8 @@ where
       font: self.font,
       font_size: self.font_size,
       line_height: self.line_height,
+      wrap_mode: self.wrap_mode,
+      tab_policy: self.tab_display_policy,
     };
 
     let key = LayoutKey::from_request(&layout_request);
@@ -186,6 +199,8 @@ where
     } else {
       previous
     };
+
+    state.scroll_extent = scroll_extent;
     state.viewport = viewport;
 
     layout::Node::new(resolved_size)
