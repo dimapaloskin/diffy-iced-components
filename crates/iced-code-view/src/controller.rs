@@ -1,0 +1,138 @@
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::thread;
+
+use iced::futures::channel::mpsc as async_mpsc;
+use iced::{Element, Task};
+
+use crate::code_view::CodeView;
+use crate::document::CodeDocument;
+
+pub struct CodeViewController {
+  document: CodeDocument,
+  padding: iced::padding::Padding,
+  border_radius: iced::border::Radius,
+  session_id: u64,
+  opened_document: Option<OpenedDocumentState>,
+}
+
+static NEXT_SESSION_ID: AtomicU64 = AtomicU64::new(1);
+
+#[derive(Debug, Clone)]
+pub struct CodeViewMessage {
+  result: JobResult,
+}
+
+#[derive(Debug, Clone)]
+enum JobResult {
+  DocumentOpened {
+    session_id: u64,
+    document_id: u64,
+    source_line_count: usize,
+  },
+}
+
+#[derive(Debug, Clone)]
+struct OpenedDocumentState {
+  source_line_count: usize,
+}
+
+impl CodeViewController {
+  pub fn new(document: CodeDocument) -> Self {
+    Self {
+      document,
+      padding: iced::padding::Padding::default(),
+      border_radius: iced::border::Radius::default(),
+      session_id: next_session_id(),
+      opened_document: None,
+    }
+  }
+
+  pub fn border_radius(mut self, border_radius: iced::border::Radius) -> Self {
+    self.border_radius = border_radius;
+    self
+  }
+
+  pub fn padding(mut self, padding: iced::padding::Padding) -> Self {
+    self.padding = padding;
+    self
+  }
+}
+
+impl CodeViewController {
+  pub fn start(&self) -> Task<CodeViewMessage> {
+    open_document_task(self.session_id, self.document.clone())
+  }
+
+  pub fn set_document(&mut self, document: CodeDocument) -> Task<CodeViewMessage> {
+    self.document = document;
+    self.session_id = next_session_id();
+    self.opened_document = None;
+    self.start()
+  }
+
+  pub fn document_id(&self) -> u64 {
+    self.document.id()
+  }
+
+  pub fn opened_document_source_line_count(&self) -> Option<usize> {
+    self
+      .opened_document
+      .as_ref()
+      .map(|opened| opened.source_line_count)
+  }
+
+  pub fn update(&mut self, message: CodeViewMessage) -> Task<CodeViewMessage> {
+    match message.result {
+      JobResult::DocumentOpened {
+        session_id,
+        document_id,
+        source_line_count,
+      } => {
+        if session_id == self.session_id && document_id == self.document.id() {
+          self.opened_document = Some(OpenedDocumentState { source_line_count })
+        }
+      }
+    }
+
+    Task::none()
+  }
+
+  pub fn view<'a, Message, Theme, Renderer>(&self) -> Element<'a, Message, Theme, Renderer>
+  where
+    Message: 'a,
+    Theme: 'a,
+    Renderer: 'a + iced::advanced::renderer::Renderer + iced::advanced::graphics::text::Renderer,
+  {
+    CodeView::new(self.document.clone())
+      .border_radius(self.border_radius)
+      .padding(self.padding)
+      .into()
+  }
+}
+
+fn next_session_id() -> u64 {
+  NEXT_SESSION_ID.fetch_add(1, Ordering::Relaxed)
+}
+
+fn open_document_task(session_id: u64, document: CodeDocument) -> Task<CodeViewMessage> {
+  background_job(move || CodeViewMessage {
+    result: JobResult::DocumentOpened {
+      session_id,
+      document_id: document.id(),
+      source_line_count: document.source_line_count(),
+    },
+  })
+}
+
+fn background_job<T>(job: impl FnOnce() -> T + Send + 'static) -> Task<T>
+where
+  T: Send + 'static,
+{
+  let (mut tx, rx) = async_mpsc::channel(1);
+
+  thread::spawn(move || {
+    let _ = tx.try_send(job());
+  });
+
+  Task::stream(rx)
+}

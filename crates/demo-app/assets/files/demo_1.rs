@@ -168,25 +168,11 @@ where
   ) -> layout::Node {
     let state = tree.state.downcast_mut::<CodeViewState>();
     let resolved_size = limits.resolve(self.width, self.height, iced::Size::ZERO);
-    let document_changed = state
-      .layout_entry
-      .as_ref()
-      .is_some_and(|entry| entry.key.text_revision != self.document.id());
-
-    // TODO: temporarily reset scroll offset if document changed.
-    // In feature consider ability to reset scroll offset to previous value when file re-opened.
-    let scroll_offset = if document_changed {
-      iced::Vector::ZERO
-    } else {
-      state.viewport.scroll_offset
-    };
-    let viewport = Viewport::new(resolved_size, self.padding, scroll_offset);
+    let viewport = Viewport::new(resolved_size, self.padding, state.viewport.scroll_offset);
     let scroll_extent =
       ScrollExtent::for_document(&self.document, self.wrap_mode, self.line_height);
-
     let scroll_offset =
       scroll_extent.clamp_offset(viewport.scroll_offset, viewport.content_bounds.size());
-
     let viewport = viewport.with_scroll_offset(scroll_offset);
     let previous = state.layout_entry.take();
 

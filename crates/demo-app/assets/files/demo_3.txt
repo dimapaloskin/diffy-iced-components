@@ -1,0 +1,17 @@
+For this second post in Zed Decoded, our blog & video series in which we're taking a closer look at how Zed is built, I've talked to Zed's three co-founders — Nathan, Max, Antonio — about the data structure at the heart of Zed: the rope.
+
+Going in I knew that data structures to represent text are a favorite topic in text editor circles. I had also used the Rope type in the Zed codebase and knew a little bit about ropes.
+
+What I didn't really understand was how Zed's rope is implemented and what that implementation enables. So I asked Nathan, Max, and Antonio about it. They've been writing code on top, below and inside the rope for years now. And, as it turns out, Zed's rope isn't really a rope, at least not in the classical sense. It's very impressive, but first: what's a rope?
+
+Why not a string?
+
+One of the most important things a text editor has to do is to represent text in memory. When you open a file in a text editor, you expect to see its contents and want to navigate through it, and — hey, that's where the name comes from — you also want to edit the text.
+
+To do that, a text editor has to load the file contents into memory — you can't just let the user stare at the raw bytes on disk. You also want to keep it in memory, because not every change should immediately be saved to disk.
+
+So the question is: how do you represent the text in memory?
+
+My naive first choice would be to use a string. Good old string. Our best friend from when we started programming. Why not use a string? It's how we represent text in memory all the time. It's not immediately obvious that that would be a bad choice, right?
+
+Hey, I bet you could go a long way with a string, but there are some problems with strings that prevent them from being the best choice, especially once you start dealing with large files and want your program to still be efficient and responsive.
