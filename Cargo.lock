@@ -795,6 +795,7 @@ name = "iced-code-view"
 version = "0.1.0"
 dependencies = [
  "iced",
+ "memchr",
 ]
 
 [[package]]

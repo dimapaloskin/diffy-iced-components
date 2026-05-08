@@ -5,3 +5,4 @@ edition.workspace = true
 
 [dependencies]
 iced.workspace = true
+memchr = "2.8.0"

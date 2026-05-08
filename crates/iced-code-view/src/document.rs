@@ -1,6 +1,8 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use memchr::memchr2_iter;
+
 use crate::policies::LineEndingPolicy;
 
 static NEXT_DOCUMENT_ID: AtomicU64 = AtomicU64::new(1);
@@ -61,7 +63,6 @@ pub(crate) struct CodeDocumentData {
   source_line_count: usize,
 }
 
-// consider memchr
 fn count_source_lines(text: &str) -> usize {
   if text.is_empty() {
     return 1;
@@ -69,30 +70,17 @@ fn count_source_lines(text: &str) -> usize {
 
   let bytes = text.as_bytes();
   let mut count = 1;
-  let mut i = 0;
+  let mut iter = memchr2_iter(b'\n', b'\r', bytes);
 
-  while i < bytes.len() {
-    match bytes[i] {
-      b'\r' => {
-        count += 1;
+  while let Some(index) = iter.next() {
+    count += 1;
 
-        if i + 1 < bytes.len() && bytes[i + 1] == b'\n' {
-          i += 2;
-        } else {
-          i += 1;
-        }
-      }
-      b'\n' => {
-        count += 1;
+    if index + 1 < bytes.len() {
+      let current = bytes[index];
+      let next = bytes[index + 1];
 
-        if i + 1 < bytes.len() && bytes[i + 1] == b'\r' {
-          i += 2;
-        } else {
-          i += 1;
-        }
-      }
-      _ => {
-        i += 1;
+      if (current == b'\r' && next == b'\n') || (current == b'\n' && next == b'\r') {
+        let _ = iter.next();
       }
     }
   }
