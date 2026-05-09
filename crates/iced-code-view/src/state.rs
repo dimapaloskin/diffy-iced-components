@@ -3,6 +3,7 @@ use std::sync::Arc;
 use iced::advanced::graphics::text::cosmic_text;
 
 use crate::layout::LayoutKey;
+use crate::measurement::{MeasurementKey, MeasurementRequest};
 use crate::scroll::ScrollExtent;
 use crate::viewport::Viewport;
 
@@ -11,6 +12,8 @@ pub(crate) struct CodeViewState {
   pub(crate) layout_entry: Option<LayoutCacheEntry>,
   pub(crate) viewport: Viewport,
   pub(crate) scroll_extent: ScrollExtent,
+  pub(crate) pending_measurement_request: Option<MeasurementRequest>,
+  pub(crate) last_published_measurement_key: Option<MeasurementKey>,
 }
 
 pub(crate) struct LayoutCacheEntry {

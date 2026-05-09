@@ -1,4 +1,5 @@
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::thread;
 
 use iced::futures::channel::mpsc as async_mpsc;
@@ -7,6 +8,9 @@ use iced::{Element, Length, Task};
 use crate::code_view::CodeView;
 use crate::document::CodeDocument;
 use crate::layout::LayoutConfig;
+use crate::measurement::{
+  MeasurementKey, MeasurementMode, MeasurementRequest, MeasurementResult, measure_document,
+};
 use crate::{TabDisplayPolicy, WrapMode};
 
 pub struct CodeViewController {
@@ -18,18 +22,61 @@ pub struct CodeViewController {
   border_radius: iced::border::Radius,
   session_id: u64,
   opened_document: Option<OpenedDocumentState>,
+  measurement_result: Option<MeasurementResult>,
+  active_measurement: Option<ActiveMeasurementJob>,
+}
+
+struct ActiveMeasurementJob {
+  session_id: u64,
+  key: MeasurementKey,
+  cancel: Arc<AtomicBool>,
+}
+
+impl ActiveMeasurementJob {
+  fn cancel(self) {
+    self.cancel.store(true, Ordering::Relaxed);
+  }
 }
 
 static NEXT_SESSION_ID: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Debug, Clone)]
 pub struct CodeViewMessage {
-  result: JobResult,
+  event: CodeViewEvent,
+}
+
+impl CodeViewMessage {
+  fn document_opened(key: OpenedDocumentKey) -> Self {
+    Self {
+      event: CodeViewEvent::DocumentOpened { key },
+    }
+  }
+
+  fn measure_requested(request: MeasurementRequest) -> Self {
+    Self {
+      event: CodeViewEvent::MeasureRequested { request },
+    }
+  }
+
+  fn measurement_finished(session_id: u64, result: MeasurementResult) -> Self {
+    Self {
+      event: CodeViewEvent::MeasurementFinished { session_id, result },
+    }
+  }
 }
 
 #[derive(Debug, Clone)]
-enum JobResult {
-  DocumentOpened { key: OpenedDocumentKey },
+enum CodeViewEvent {
+  DocumentOpened {
+    key: OpenedDocumentKey,
+  },
+  MeasureRequested {
+    request: MeasurementRequest,
+  },
+  MeasurementFinished {
+    session_id: u64,
+    result: MeasurementResult,
+  },
 }
 
 #[derive(Debug, Clone)]
@@ -61,6 +108,9 @@ impl CodeViewController {
       border_radius: iced::border::Radius::default(),
       session_id: next_session_id(),
       opened_document: None,
+
+      measurement_result: None,
+      active_measurement: None,
     }
   }
 
@@ -116,9 +166,13 @@ impl CodeViewController {
   }
 
   pub fn set_document(&mut self, document: CodeDocument) -> Task<CodeViewMessage> {
+    self.cancel_active_measurement();
+
     self.document = document;
     self.session_id = next_session_id();
     self.opened_document = None;
+    self.measurement_result = None;
+
     self.start()
   }
 
@@ -134,30 +188,103 @@ impl CodeViewController {
     self.opened_document.is_some()
   }
 
+  fn cancel_active_measurement(&mut self) {
+    if let Some(active) = self.active_measurement.take() {
+      active.cancel();
+    }
+  }
+
+  fn on_measure_requested(&mut self, request: MeasurementRequest) -> Task<CodeViewMessage> {
+    if request.key.document_id != self.document.id() {
+      return Task::none();
+    }
+
+    if !matches!(request.key.mode, MeasurementMode::NoWrapHorizontal) {
+      return Task::none();
+    }
+
+    if self
+      .measurement_result
+      .as_ref()
+      .is_some_and(|result| result.key == request.key)
+    {
+      return Task::none();
+    }
+
+    if self
+      .active_measurement
+      .as_ref()
+      .is_some_and(|active| active.session_id == self.session_id && active.key == request.key)
+    {
+      return Task::none();
+    }
+
+    self.cancel_active_measurement();
+
+    let session_id = self.session_id;
+    let key = request.key;
+    let cancel = Arc::new(AtomicBool::new(false));
+
+    self.active_measurement = Some(ActiveMeasurementJob {
+      session_id,
+      key,
+      cancel: Arc::clone(&cancel),
+    });
+
+    measure_document_task(session_id, request, cancel)
+  }
+
+  fn on_measurement_finished(
+    &mut self,
+    session_id: u64,
+    result: MeasurementResult,
+  ) -> Task<CodeViewMessage> {
+    let Some(active) = self.active_measurement.as_ref() else {
+      return Task::none();
+    };
+
+    if active.session_id != session_id || active.key != result.key {
+      return Task::none();
+    }
+
+    if session_id != self.session_id || result.key.document_id != self.document.id() {
+      return Task::none();
+    }
+
+    self.active_measurement = None;
+    self.measurement_result = Some(result);
+
+    Task::none()
+  }
+
   pub fn update(&mut self, message: CodeViewMessage) -> Task<CodeViewMessage> {
-    match message.result {
-      JobResult::DocumentOpened { key } => {
+    match message.event {
+      CodeViewEvent::DocumentOpened { key } => {
         let current_key = OpenedDocumentKey::new(self.session_id, self.document.id());
 
         if current_key == key {
           self.opened_document = Some(OpenedDocumentState)
         }
+
+        Task::none()
+      }
+      CodeViewEvent::MeasureRequested { request } => self.on_measure_requested(request),
+      CodeViewEvent::MeasurementFinished { session_id, result } => {
+        self.on_measurement_finished(session_id, result)
       }
     }
-
-    Task::none()
   }
 
-  pub fn view<'a, Message, Theme, Renderer>(&self) -> Element<'a, Message, Theme, Renderer>
+  pub fn view<'a, Theme, Renderer>(&self) -> Element<'a, CodeViewMessage, Theme, Renderer>
   where
-    Message: 'a,
     Theme: 'a,
     Renderer: 'a + iced::advanced::renderer::Renderer + iced::advanced::graphics::text::Renderer,
   {
-    CodeView::new(self.document.clone())
+    CodeView::new(self.document.clone(), CodeViewMessage::measure_requested)
       .layout_config(self.layout_config)
       .width(self.width)
       .height(self.height)
+      .measurement_result(self.measurement_result.clone())
       .border_radius(self.border_radius)
       .padding(self.padding)
       .into()
@@ -169,24 +296,34 @@ fn next_session_id() -> u64 {
 }
 
 fn open_document_task(session_id: u64, document: CodeDocument) -> Task<CodeViewMessage> {
-  background_job(move || {
+  background_optional_job(move || {
     let key = OpenedDocumentKey::new(session_id, document.id());
-
-    CodeViewMessage {
-      result: JobResult::DocumentOpened { key },
-    }
+    Some(CodeViewMessage::document_opened(key))
   })
 }
 
-fn background_job<T>(job: impl FnOnce() -> T + Send + 'static) -> Task<T>
+fn background_optional_job<T>(job: impl FnOnce() -> Option<T> + Send + 'static) -> Task<T>
 where
   T: Send + 'static,
 {
   let (mut tx, rx) = async_mpsc::channel(1);
 
   thread::spawn(move || {
-    let _ = tx.try_send(job());
+    if let Some(message) = job() {
+      let _ = tx.try_send(message);
+    }
   });
 
   Task::stream(rx)
+}
+
+fn measure_document_task(
+  session_id: u64,
+  request: MeasurementRequest,
+  cancel: Arc<AtomicBool>,
+) -> Task<CodeViewMessage> {
+  background_optional_job(move || {
+    measure_document(request, &cancel)
+      .map(|result| CodeViewMessage::measurement_finished(session_id, result))
+  })
 }

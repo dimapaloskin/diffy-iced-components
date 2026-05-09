@@ -1,3 +1,4 @@
+use crate::measurement::{MeasurementOutput, MeasurementResult};
 use crate::{CodeDocument, WrapMode};
 
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
@@ -11,10 +12,11 @@ impl ScrollExtent {
     document: &CodeDocument,
     wrap_mode: WrapMode,
     line_height: f32,
+    measurement_result: Option<&MeasurementResult>,
   ) -> Self {
     match wrap_mode {
       WrapMode::NoWrap => Self {
-        horizontal: AxisExtent::Unknown,
+        horizontal: no_wrap_horizontal_extent(measurement_result),
         vertical: AxisExtent::Exact {
           content: document.source_line_count() as f32 * line_height,
         },
@@ -57,6 +59,15 @@ impl AxisExtent {
         offset.clamp(0.0, max)
       }
     }
+  }
+}
+
+fn no_wrap_horizontal_extent(measurement_result: Option<&MeasurementResult>) -> AxisExtent {
+  match measurement_result.map(|result| result.output) {
+    Some(MeasurementOutput::NoWrapHorizontalExtent { content_width }) => AxisExtent::Exact {
+      content: content_width,
+    },
+    None => AxisExtent::Unknown,
   }
 }
 
@@ -105,15 +116,17 @@ mod tests {
   }
 
   #[test]
-  fn no_wrap_extent_uses_source_line_count_for_vertical_content() {
-    let document = CodeDocument::new("a\nb\nc");
+  fn no_wrap_extent_uses_measurement_for_horizontal_content() {
+    use crate::layout::LayoutConfig;
+
+    let document = CodeDocument::new("short\nlonger line");
+    let layout_config = LayoutConfig::default();
+    let request = crate::measurement::MeasurementRequest::new(&document, layout_config, 300.0);
+    let result = MeasurementResult::no_wrap_horizontal_extent(request.key, 1234.0);
 
     assert_eq!(
-      ScrollExtent::for_document(&document, WrapMode::NoWrap, 20.0),
-      ScrollExtent {
-        horizontal: AxisExtent::Unknown,
-        vertical: AxisExtent::Exact { content: 60.0 },
-      }
+      ScrollExtent::for_document(&document, WrapMode::NoWrap, 20.0, Some(&result)).horizontal,
+      AxisExtent::Exact { content: 1234.0 }
     );
   }
 
@@ -122,7 +135,7 @@ mod tests {
     let document = CodeDocument::new("a\n");
 
     assert_eq!(
-      ScrollExtent::for_document(&document, WrapMode::NoWrap, 20.0).vertical,
+      ScrollExtent::for_document(&document, WrapMode::NoWrap, 20.0, None).vertical,
       AxisExtent::Exact { content: 40.0 }
     );
   }
@@ -132,7 +145,7 @@ mod tests {
     let document = CodeDocument::new("a very long line that may wrap later");
 
     assert_eq!(
-      ScrollExtent::for_document(&document, WrapMode::SoftWrap, 20.0),
+      ScrollExtent::for_document(&document, WrapMode::SoftWrap, 20.0, None),
       ScrollExtent {
         horizontal: AxisExtent::Unknown,
         vertical: AxisExtent::Unknown,

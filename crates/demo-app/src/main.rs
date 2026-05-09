@@ -79,7 +79,7 @@ impl App {
       column![
         text(status).font(iced::Font::MONOSPACE),
         file_buttons,
-        self.code_view.view(),
+        self.code_view.view().map(AppMessage::CodeView),
       ]
       .spacing(10.0),
     )

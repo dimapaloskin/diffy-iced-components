@@ -1,9 +1,11 @@
 mod code_view;
 mod controller;
 mod document;
+mod font_lock;
 mod layout;
 mod layout_engine;
 mod line_index;
+mod measurement;
 mod policies;
 mod scroll;
 mod state;

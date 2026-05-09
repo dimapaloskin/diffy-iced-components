@@ -1,5 +1,6 @@
 use iced::advanced::graphics::text::{self, cosmic_text};
 
+use crate::font_lock::foreground_font_system_write;
 use crate::layout::{LayoutKey, LayoutRequest};
 use crate::state::{CosmicLayoutPayload, LayoutCacheEntry, LayoutSnapshot, VisualLineSnapshot};
 
@@ -7,9 +8,7 @@ pub(crate) fn rebuild_layout(
   request: LayoutRequest,
   previous: Option<LayoutCacheEntry>,
 ) -> LayoutCacheEntry {
-  let mut font_system = text::font_system()
-    .write()
-    .expect("iced shared font system lock should not be poisoned");
+  let mut font_system = foreground_font_system_write();
 
   let needs_set_text = previous
     .as_ref()
@@ -68,9 +67,7 @@ pub(crate) fn sync_scroll(entry: &mut LayoutCacheEntry, scroll_offset: iced::Vec
     return;
   }
 
-  let mut font_system = text::font_system()
-    .write()
-    .expect("iced shared font system lock should not be poisoned");
+  let mut font_system = foreground_font_system_write();
 
   let raw_font_system = font_system.raw();
   let buffer = entry.payload.buffer_mut();
