@@ -16,11 +16,11 @@ pub(crate) fn rebuild_layout(
     .is_none_or(|entry| entry.key.text_revision != request.document.id());
 
   let needs_update_attrs = previous.as_ref().is_some_and(|entry| {
-    entry.key.text_revision == request.document.id() && entry.key.font != request.font
+    entry.key.text_revision == request.document.id() && entry.key.font != request.config.font
   });
 
   let raw_font_system = font_system.raw();
-  let metrics = cosmic_text::Metrics::new(request.font_size, request.line_height);
+  let metrics = cosmic_text::Metrics::new(request.config.font_size, request.config.line_height);
 
   let mut payload = previous.map(|entry| entry.payload).unwrap_or_else(|| {
     let buffer = cosmic_text::Buffer::new(raw_font_system, metrics);
@@ -30,15 +30,15 @@ pub(crate) fn rebuild_layout(
 
   let buffer = payload.buffer_mut();
 
-  buffer.set_wrap(request.wrap_mode.to_cosmic());
+  buffer.set_wrap(request.config.wrap_mode.to_cosmic());
   buffer.set_metrics_and_size(
     metrics,
     Some(request.content_size.width),
     Some(request.content_size.height),
   );
-  buffer.set_tab_width(request.tab_policy.spaces_per_tab().into());
+  buffer.set_tab_width(request.config.tab_display_policy.spaces_per_tab().into());
 
-  let attrs = text::to_attributes(request.font);
+  let attrs = text::to_attributes(request.config.font);
 
   if needs_set_text {
     buffer.set_text(

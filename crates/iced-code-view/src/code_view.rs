@@ -8,11 +8,10 @@ use iced::advanced::widget;
 use iced::advanced::{layout, renderer::Renderer as RendererTrait, widget::Widget};
 
 use crate::document::CodeDocument;
+use crate::layout::LayoutConfig;
 use crate::layout::LayoutKey;
 use crate::layout::LayoutRequest;
-use crate::layout::WrapMode;
 use crate::layout_engine;
-use crate::policies::TabDisplayPolicy;
 use crate::scroll::ScrollExtent;
 use crate::state::CodeViewState;
 use crate::viewport::Viewport;
@@ -21,11 +20,7 @@ pub struct CodeView {
   document: CodeDocument,
   width: Length,
   height: Length,
-  font: iced::Font,
-  font_size: f32,
-  line_height: f32,
-  wrap_mode: WrapMode,
-  tab_display_policy: TabDisplayPolicy,
+  layout_config: LayoutConfig,
   padding: iced::padding::Padding,
   border_radius: iced::border::Radius,
 }
@@ -36,58 +31,34 @@ impl CodeView {
       document,
       width: Length::Fill,
       height: Length::Fill,
-      font: iced::Font::MONOSPACE,
-      font_size: 16.0,
-      line_height: 24.0,
-      wrap_mode: WrapMode::default(),
-      tab_display_policy: TabDisplayPolicy::default(),
+      layout_config: LayoutConfig::default(),
       padding: iced::padding::Padding::default(),
       border_radius: iced::border::Radius::default(),
     }
   }
 
-  pub fn border_radius(mut self, border_radius: iced::border::Radius) -> Self {
-    self.border_radius = border_radius;
-    self
-  }
-
-  pub fn width(mut self, width: Length) -> Self {
+  pub(crate) fn width(mut self, width: Length) -> Self {
     self.width = width;
     self
   }
 
-  pub fn height(mut self, height: Length) -> Self {
+  pub(crate) fn height(mut self, height: Length) -> Self {
     self.height = height;
     self
   }
 
-  pub fn font(mut self, font: iced::Font) -> Self {
-    self.font = font;
+  pub(crate) fn layout_config(mut self, layout_config: LayoutConfig) -> Self {
+    self.layout_config = layout_config;
     self
   }
 
-  pub fn font_size(mut self, font_size: f32) -> Self {
-    self.font_size = font_size;
+  pub(crate) fn border_radius(mut self, border_radius: iced::border::Radius) -> Self {
+    self.border_radius = border_radius;
     self
   }
 
-  pub fn line_height(mut self, line_height: f32) -> Self {
-    self.line_height = line_height;
-    self
-  }
-
-  pub fn padding(mut self, padding: iced::padding::Padding) -> Self {
+  pub(crate) fn padding(mut self, padding: iced::padding::Padding) -> Self {
     self.padding = padding;
-    self
-  }
-
-  pub fn wrap_mode(mut self, wrap_mode: WrapMode) -> Self {
-    self.wrap_mode = wrap_mode;
-    self
-  }
-
-  pub fn tab_display_policy(mut self, tab_display_policy: TabDisplayPolicy) -> Self {
-    self.tab_display_policy = tab_display_policy;
     self
   }
 }
@@ -137,7 +108,7 @@ where
     let delta = match delta {
       ScrollDelta::Pixels { x, y } => [*x, *y],
       ScrollDelta::Lines { x, y } => {
-        let step = self.line_height * 3.0;
+        let step = self.layout_config.line_height * 3.0;
         [*x * step, *y * step]
       }
     };
@@ -181,8 +152,11 @@ where
       state.viewport.scroll_offset
     };
     let viewport = Viewport::new(resolved_size, self.padding, scroll_offset);
-    let scroll_extent =
-      ScrollExtent::for_document(&self.document, self.wrap_mode, self.line_height);
+    let scroll_extent = ScrollExtent::for_document(
+      &self.document,
+      self.layout_config.wrap_mode,
+      self.layout_config.line_height,
+    );
 
     let scroll_offset =
       scroll_extent.clamp_offset(viewport.scroll_offset, viewport.content_bounds.size());
@@ -194,11 +168,7 @@ where
       document: &self.document,
       content_size: viewport.content_bounds.size(),
       scroll_offset: viewport.scroll_offset,
-      font: self.font,
-      font_size: self.font_size,
-      line_height: self.line_height,
-      wrap_mode: self.wrap_mode,
-      tab_policy: self.tab_display_policy,
+      config: self.layout_config,
     };
 
     let key = LayoutKey::from_request(&layout_request);

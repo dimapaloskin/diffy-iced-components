@@ -2,13 +2,18 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::thread;
 
 use iced::futures::channel::mpsc as async_mpsc;
-use iced::{Element, Task};
+use iced::{Element, Length, Task};
 
 use crate::code_view::CodeView;
 use crate::document::CodeDocument;
+use crate::layout::LayoutConfig;
+use crate::{TabDisplayPolicy, WrapMode};
 
 pub struct CodeViewController {
   document: CodeDocument,
+  width: Length,
+  height: Length,
+  layout_config: LayoutConfig,
   padding: iced::padding::Padding,
   border_radius: iced::border::Radius,
   session_id: u64,
@@ -49,11 +54,24 @@ impl CodeViewController {
   pub fn new(document: CodeDocument) -> Self {
     Self {
       document,
+      width: Length::Fill,
+      height: Length::Fill,
+      layout_config: LayoutConfig::default(),
       padding: iced::padding::Padding::default(),
       border_radius: iced::border::Radius::default(),
       session_id: next_session_id(),
       opened_document: None,
     }
+  }
+
+  pub fn width(mut self, width: Length) -> Self {
+    self.width = width;
+    self
+  }
+
+  pub fn height(mut self, height: Length) -> Self {
+    self.height = height;
+    self
   }
 
   pub fn border_radius(mut self, border_radius: iced::border::Radius) -> Self {
@@ -63,6 +81,31 @@ impl CodeViewController {
 
   pub fn padding(mut self, padding: iced::padding::Padding) -> Self {
     self.padding = padding;
+    self
+  }
+
+  pub fn font(mut self, font: iced::Font) -> Self {
+    self.layout_config.font = font;
+    self
+  }
+
+  pub fn font_size(mut self, font_size: f32) -> Self {
+    self.layout_config.font_size = font_size;
+    self
+  }
+
+  pub fn line_height(mut self, line_height: f32) -> Self {
+    self.layout_config.line_height = line_height;
+    self
+  }
+
+  pub fn wrap_mode(mut self, wrap_mode: WrapMode) -> Self {
+    self.layout_config.wrap_mode = wrap_mode;
+    self
+  }
+
+  pub fn tab_display_policy(mut self, tab_display_policy: TabDisplayPolicy) -> Self {
+    self.layout_config.tab_display_policy = tab_display_policy;
     self
   }
 }
@@ -112,6 +155,9 @@ impl CodeViewController {
     Renderer: 'a + iced::advanced::renderer::Renderer + iced::advanced::graphics::text::Renderer,
   {
     CodeView::new(self.document.clone())
+      .layout_config(self.layout_config)
+      .width(self.width)
+      .height(self.height)
       .border_radius(self.border_radius)
       .padding(self.padding)
       .into()

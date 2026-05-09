@@ -18,6 +18,27 @@ impl WrapMode {
   }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct LayoutConfig {
+  pub(crate) font: iced::Font,
+  pub(crate) font_size: f32,
+  pub(crate) line_height: f32,
+  pub(crate) wrap_mode: WrapMode,
+  pub(crate) tab_display_policy: TabDisplayPolicy,
+}
+
+impl Default for LayoutConfig {
+  fn default() -> Self {
+    Self {
+      font: iced::Font::MONOSPACE,
+      font_size: 16.0,
+      line_height: 24.0,
+      wrap_mode: WrapMode::NoWrap,
+      tab_display_policy: TabDisplayPolicy::default(),
+    }
+  }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct LayoutKey {
   pub(crate) text_revision: u64,
@@ -36,11 +57,11 @@ impl LayoutKey {
       text_revision: request.document.id(),
       content_width_bits: request.content_size.width.to_bits(),
       content_height_bits: request.content_size.height.to_bits(),
-      font: request.font,
-      font_size_bits: request.font_size.to_bits(),
-      line_height_bits: request.line_height.to_bits(),
-      wrap_mode: request.wrap_mode,
-      tab_policy: request.tab_policy.normalized(),
+      font: request.config.font,
+      font_size_bits: request.config.font_size.to_bits(),
+      line_height_bits: request.config.line_height.to_bits(),
+      wrap_mode: request.config.wrap_mode,
+      tab_policy: request.config.tab_display_policy.normalized(),
     }
   }
 }
@@ -49,9 +70,5 @@ pub(crate) struct LayoutRequest<'a> {
   pub(crate) document: &'a CodeDocument,
   pub(crate) content_size: iced::Size,
   pub(crate) scroll_offset: iced::Vector,
-  pub(crate) font: iced::Font,
-  pub(crate) font_size: f32,
-  pub(crate) line_height: f32,
-  pub(crate) wrap_mode: WrapMode,
-  pub(crate) tab_policy: TabDisplayPolicy,
+  pub(crate) config: LayoutConfig,
 }
