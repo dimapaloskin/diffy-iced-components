@@ -117,9 +117,7 @@ fn measure_no_wrap_horizontal(
   cancel: &AtomicBool,
 ) -> Option<MeasurementResult> {
   let key = request.key;
-  let attrs = text::to_attributes(request.layout_config.font);
-  let mut buffer = new_measurement_buffer(request.layout_config, cancel)?;
-  configure_no_wrap_measurement_buffer(&mut buffer, request.layout_config);
+  let mut line_measurer = NoWrapLineMeasurer::new(request.layout_config);
 
   let mut max_width: f32 = 0.0;
 
@@ -138,7 +136,7 @@ fn measure_no_wrap_horizontal(
       continue;
     }
 
-    max_width = max_width.max(measure_line_width(&mut buffer, &attrs, line, cancel)?);
+    max_width = max_width.max(line_measurer.measure_line_width(line, cancel)?);
 
     thread::yield_now();
   }
@@ -146,54 +144,81 @@ fn measure_no_wrap_horizontal(
   Some(MeasurementResult::no_wrap_horizontal_extent(key, max_width))
 }
 
-fn new_measurement_buffer(
-  layout_config: LayoutConfig,
-  cancel: &AtomicBool,
-) -> Option<cosmic_text::Buffer> {
-  let metrics = cosmic_text::Metrics::new(layout_config.font_size, layout_config.line_height);
-
-  with_worker_font_system(cancel, |font_system| {
-    cosmic_text::Buffer::new(font_system, metrics)
-  })
+struct NoWrapLineMeasurer {
+  shape: Option<cosmic_text::ShapeLine>,
+  layout_scratch: cosmic_text::ShapeBuffer,
+  layout_lines: Vec<cosmic_text::LayoutLine>,
+  attrs_list: cosmic_text::AttrsList,
+  font_size: f32,
+  tab_width: u16,
 }
 
-fn configure_no_wrap_measurement_buffer(
-  buffer: &mut cosmic_text::Buffer,
-  layout_config: LayoutConfig,
-) {
-  let metrics = cosmic_text::Metrics::new(layout_config.font_size, layout_config.line_height);
+impl NoWrapLineMeasurer {
+  fn new(layout_config: LayoutConfig) -> Self {
+    let attrs = text::to_attributes(layout_config.font);
 
-  buffer.set_wrap(cosmic_text::Wrap::None);
-  buffer.set_metrics_and_size(metrics, None, None);
-  buffer.set_tab_width(layout_config.tab_display_policy.spaces_per_tab().into());
-  buffer.set_scroll(cosmic_text::Scroll::new(0, 0.0, 0.0));
-}
-
-fn measure_line_width(
-  buffer: &mut cosmic_text::Buffer,
-  attrs: &cosmic_text::Attrs<'_>,
-  line: &str,
-  cancel: &AtomicBool,
-) -> Option<f32> {
-  if cancel.load(Ordering::Relaxed) {
-    return None;
+    Self {
+      shape: None,
+      layout_scratch: cosmic_text::ShapeBuffer::default(),
+      layout_lines: Vec::new(),
+      attrs_list: cosmic_text::AttrsList::new(&attrs),
+      font_size: layout_config.font_size,
+      tab_width: layout_config.tab_display_policy.spaces_per_tab().into(),
+    }
   }
 
-  buffer.set_text(line, attrs, cosmic_text::Shaping::Advanced, None);
+  fn measure_line_width(&mut self, line: &str, cancel: &AtomicBool) -> Option<f32> {
+    if cancel.load(Ordering::Relaxed) {
+      return None;
+    }
 
-  with_worker_font_system(cancel, |font_system| {
-    buffer.shape_until_scroll(font_system, false);
-  })?;
+    with_worker_font_system(cancel, |font_system| match &mut self.shape {
+      Some(shape) => shape.build(
+        font_system,
+        line,
+        &self.attrs_list,
+        cosmic_text::Shaping::Advanced,
+        self.tab_width,
+      ),
+      None => {
+        self.shape = Some(cosmic_text::ShapeLine::new(
+          font_system,
+          line,
+          &self.attrs_list,
+          cosmic_text::Shaping::Advanced,
+          self.tab_width,
+        ));
+      }
+    })?;
 
-  if cancel.load(Ordering::Relaxed) {
-    return None;
+    if cancel.load(Ordering::Relaxed) {
+      return None;
+    }
+
+    let shape = self
+      .shape
+      .as_ref()
+      .expect("line shape should be initialized after successful measurement");
+
+    shape.layout_to_buffer(
+      &mut self.layout_scratch,
+      self.font_size,
+      None,
+      cosmic_text::Wrap::None,
+      cosmic_text::Ellipsize::None,
+      None,
+      &mut self.layout_lines,
+      None,
+      cosmic_text::Hinting::default(),
+    );
+
+    Some(
+      self
+        .layout_lines
+        .iter()
+        .fold(0.0_f32, |max_width, line| max_width.max(line.w)),
+    )
   }
-
-  Some(
-    buffer
-      .layout_runs()
-      .fold(0.0_f32, |max_width, run| max_width.max(run.line_w)),
-  )
 }
 
 fn with_worker_font_system<T>(
