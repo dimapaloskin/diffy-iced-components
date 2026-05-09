@@ -24,16 +24,25 @@ pub struct CodeViewMessage {
 
 #[derive(Debug, Clone)]
 enum JobResult {
-  DocumentOpened {
-    session_id: u64,
-    document_id: u64,
-    source_line_count: usize,
-  },
+  DocumentOpened { key: OpenedDocumentKey },
 }
 
 #[derive(Debug, Clone)]
-struct OpenedDocumentState {
-  source_line_count: usize,
+struct OpenedDocumentState;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct OpenedDocumentKey {
+  session_id: u64,
+  document_id: u64,
+}
+
+impl OpenedDocumentKey {
+  fn new(session_id: u64, document_id: u64) -> Self {
+    Self {
+      session_id,
+      document_id,
+    }
+  }
 }
 
 impl CodeViewController {
@@ -74,22 +83,21 @@ impl CodeViewController {
     self.document.id()
   }
 
-  pub fn opened_document_source_line_count(&self) -> Option<usize> {
-    self
-      .opened_document
-      .as_ref()
-      .map(|opened| opened.source_line_count)
+  pub fn source_line_count(&self) -> usize {
+    self.document.source_line_count()
+  }
+
+  pub fn is_opened(&self) -> bool {
+    self.opened_document.is_some()
   }
 
   pub fn update(&mut self, message: CodeViewMessage) -> Task<CodeViewMessage> {
     match message.result {
-      JobResult::DocumentOpened {
-        session_id,
-        document_id,
-        source_line_count,
-      } => {
-        if session_id == self.session_id && document_id == self.document.id() {
-          self.opened_document = Some(OpenedDocumentState { source_line_count })
+      JobResult::DocumentOpened { key } => {
+        let current_key = OpenedDocumentKey::new(self.session_id, self.document.id());
+
+        if current_key == key {
+          self.opened_document = Some(OpenedDocumentState)
         }
       }
     }
@@ -115,12 +123,12 @@ fn next_session_id() -> u64 {
 }
 
 fn open_document_task(session_id: u64, document: CodeDocument) -> Task<CodeViewMessage> {
-  background_job(move || CodeViewMessage {
-    result: JobResult::DocumentOpened {
-      session_id,
-      document_id: document.id(),
-      source_line_count: document.source_line_count(),
-    },
+  background_job(move || {
+    let key = OpenedDocumentKey::new(session_id, document.id());
+
+    CodeViewMessage {
+      result: JobResult::DocumentOpened { key },
+    }
   })
 }
 

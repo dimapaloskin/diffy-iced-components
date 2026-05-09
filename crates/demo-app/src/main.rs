@@ -62,17 +62,32 @@ impl App {
         row.push(button(*name).on_press(AppMessage::SelectFile(index)))
       });
 
-    let status = match self.code_view.opened_document_source_line_count() {
-      Some(lines) => format!("Opened: {}, lines: {}", FILES[self.selected_file].0, lines),
-      None => "loading".into(),
+    let open_status = if self.code_view.is_opened() {
+      "ready"
+    } else {
+      "loading"
     };
 
-    container(column![text(status), file_buttons, self.code_view.view(),].spacing(10.0))
-      .padding(10.0)
-      .width(Length::Fill)
-      .height(Length::Fill)
-      .align_x(alignment::Horizontal::Center)
-      .align_y(alignment::Vertical::Center)
-      .into()
+    let status = format!(
+      "file: {}, status: {}, lines: {}",
+      FILES[self.selected_file].0,
+      open_status,
+      self.code_view.source_line_count()
+    );
+
+    container(
+      column![
+        text(status).font(iced::Font::MONOSPACE),
+        file_buttons,
+        self.code_view.view(),
+      ]
+      .spacing(10.0),
+    )
+    .padding(10.0)
+    .width(Length::Fill)
+    .height(Length::Fill)
+    .align_x(alignment::Horizontal::Center)
+    .align_y(alignment::Vertical::Center)
+    .into()
   }
 }

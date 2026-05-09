@@ -3,6 +3,7 @@ mod controller;
 mod document;
 mod layout;
 mod layout_engine;
+mod line_index;
 mod policies;
 mod scroll;
 mod state;
