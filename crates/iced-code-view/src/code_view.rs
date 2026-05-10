@@ -213,7 +213,7 @@ impl<'a, Message> CodeView<'a, Message> {
     }
 
     // Stop wheel events at CodeView, so scrolling does not chain to a parent at edges.
-    // For web-like scroll chaining, move this inside the `state.viewport.scroll_offset != old` check
+    // For web-like scroll chaining, capture only when `try_apply_wheel_delta` returns true.
     shell.capture_event();
 
     let delta = self.scroll_delta_to_pixels(delta);
