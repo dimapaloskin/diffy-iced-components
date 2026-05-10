@@ -10,84 +10,45 @@ use iced::mouse::ScrollDelta;
 
 use crate::document::CodeDocument;
 use crate::layout::LayoutConfig;
-use crate::layout::LayoutKey;
 use crate::layout::LayoutRequest;
-use crate::layout_engine;
 use crate::measurement::{MeasurementRequest, MeasurementResult};
 use crate::scroll::ScrollExtent;
 use crate::state::CodeViewState;
 use crate::viewport::Viewport;
 
-pub struct CodeView<Message> {
-  document: CodeDocument,
-  width: Length,
-  height: Length,
-  layout_config: LayoutConfig,
-  padding: iced::padding::Padding,
-  border_radius: iced::border::Radius,
-
-  measurement_result: Option<MeasurementResult>,
+pub(crate) struct CodeView<'a, Message> {
+  inputs: CodeViewInputs<'a>,
   on_measure_request: fn(MeasurementRequest) -> Message,
 }
 
-impl<Message> CodeView<Message> {
+pub(crate) struct CodeViewInputs<'a> {
+  pub(crate) document: &'a CodeDocument,
+  pub(crate) width: Length,
+  pub(crate) height: Length,
+  pub(crate) layout_config: LayoutConfig,
+  pub(crate) padding: iced::padding::Padding,
+  pub(crate) border_radius: iced::border::Radius,
+  pub(crate) measurement_result: Option<&'a MeasurementResult>,
+}
+
+impl<'a, Message> CodeView<'a, Message> {
   pub(crate) fn new(
-    document: CodeDocument,
+    inputs: CodeViewInputs<'a>,
     on_measure_request: fn(MeasurementRequest) -> Message,
   ) -> Self {
     Self {
-      document,
-      width: Length::Fill,
-      height: Length::Fill,
-      layout_config: LayoutConfig::default(),
-      padding: iced::padding::Padding::default(),
-      border_radius: iced::border::Radius::default(),
-
-      measurement_result: None,
+      inputs,
       on_measure_request,
     }
   }
-
-  pub(crate) fn width(mut self, width: Length) -> Self {
-    self.width = width;
-    self
-  }
-
-  pub(crate) fn height(mut self, height: Length) -> Self {
-    self.height = height;
-    self
-  }
-
-  pub(crate) fn layout_config(mut self, layout_config: LayoutConfig) -> Self {
-    self.layout_config = layout_config;
-    self
-  }
-
-  pub(crate) fn border_radius(mut self, border_radius: iced::border::Radius) -> Self {
-    self.border_radius = border_radius;
-    self
-  }
-
-  pub(crate) fn padding(mut self, padding: iced::padding::Padding) -> Self {
-    self.padding = padding;
-    self
-  }
-
-  pub(crate) fn measurement_result(
-    mut self,
-    measurement_result: Option<MeasurementResult>,
-  ) -> Self {
-    self.measurement_result = measurement_result;
-    self
-  }
 }
 
-impl<Message, Theme, Renderer> Widget<Message, Theme, Renderer> for CodeView<Message>
+impl<'a, Message, Theme, Renderer> Widget<Message, Theme, Renderer> for CodeView<'a, Message>
 where
   Renderer: RendererTrait + TextRendererTrait,
 {
   fn size(&self) -> iced::Size<iced::Length> {
-    iced::Size::new(self.width, self.height)
+    iced::Size::new(self.inputs.width, self.inputs.height)
   }
 
   fn tag(&self) -> iced::advanced::widget::tree::Tag {
@@ -129,11 +90,11 @@ where
     limits: &iced::advanced::layout::Limits,
   ) -> layout::Node {
     let state = tree.state.downcast_mut::<CodeViewState>();
-    let resolved_size = limits.resolve(self.width, self.height, iced::Size::ZERO);
+    let resolved_size = limits.resolve(self.inputs.width, self.inputs.height, iced::Size::ZERO);
     let document_changed = state
       .layout_entry
       .as_ref()
-      .is_some_and(|entry| entry.key.text_revision != self.document.id());
+      .is_some_and(|entry| entry.key.text_revision != self.inputs.document.id());
 
     // TODO: temporarily reset scroll offset if document changed.
     // In feature consider ability to reset scroll offset to previous value when file re-opened.
@@ -142,29 +103,22 @@ where
     } else {
       state.viewport.scroll_offset
     };
-    let viewport = Viewport::new(resolved_size, self.padding, scroll_offset);
+
+    let viewport = Viewport::new(resolved_size, self.inputs.padding, scroll_offset);
 
     let measurement_request = MeasurementRequest::new(
-      &self.document,
-      self.layout_config,
+      self.inputs.document,
+      self.inputs.layout_config,
       viewport.content_bounds.size().width,
     );
 
-    let measurement_result = self
-      .measurement_result
-      .as_ref()
-      .filter(|result| result.key == measurement_request.key);
-
-    state.pending_measurement_request = if measurement_result.is_some() {
-      None
-    } else {
-      Some(measurement_request)
-    };
+    let measurement_result =
+      state.update_pending_measurement(measurement_request, self.inputs.measurement_result);
 
     let scroll_extent = ScrollExtent::new(
-      &self.document,
-      self.layout_config.wrap_mode,
-      self.layout_config.line_height,
+      self.inputs.document,
+      self.inputs.layout_config.wrap_mode,
+      self.inputs.layout_config.line_height,
       measurement_result,
     );
 
@@ -172,28 +126,15 @@ where
       scroll_extent.clamp_offset(viewport.scroll_offset, viewport.content_bounds.size());
 
     let viewport = viewport.with_scroll_offset(scroll_offset);
-    let previous = state.layout_entry.take();
 
     let layout_request = LayoutRequest {
-      document: &self.document,
+      document: self.inputs.document,
       content_size: viewport.content_bounds.size(),
       scroll_offset: viewport.scroll_offset,
-      config: self.layout_config,
+      config: self.inputs.layout_config,
     };
 
-    let key = LayoutKey::from_request(&layout_request);
-
-    let needs_rebuild = previous.as_ref().is_none_or(|p| p.key != key);
-    let needs_scroll_sync = previous
-      .as_ref()
-      .is_some_and(|p| p.prepared_scroll_offset != viewport.scroll_offset);
-
-    state.layout_entry = if needs_rebuild || needs_scroll_sync {
-      Some(layout_engine::rebuild_layout(layout_request, previous))
-    } else {
-      previous
-    };
-
+    state.refresh_layout(layout_request);
     state.scroll_extent = scroll_extent;
     state.viewport = viewport;
 
@@ -219,7 +160,7 @@ where
       border: iced::Border {
         color: iced::Color::TRANSPARENT,
         width: 0.0,
-        radius: self.border_radius,
+        radius: self.inputs.border_radius,
       },
       ..Quad::default()
     };
@@ -246,7 +187,17 @@ where
   }
 }
 
-impl<Message> CodeView<Message> {
+impl<'a, Message> CodeView<'a, Message> {
+  fn scroll_delta_to_pixels(&self, delta: &ScrollDelta) -> iced::Vector {
+    match delta {
+      ScrollDelta::Pixels { x, y } => iced::Vector::new(*x, *y),
+      ScrollDelta::Lines { x, y } => {
+        let step = self.inputs.layout_config.line_height * 3.0;
+        iced::Vector::new(*x * step, *y * step)
+      }
+    }
+  }
+
   fn on_mouse_wheel(
     &mut self,
     tree: &mut widget::Tree,
@@ -265,28 +216,10 @@ impl<Message> CodeView<Message> {
     // For web-like scroll chaining, move this inside the `state.viewport.scroll_offset != old` check
     shell.capture_event();
 
-    let delta = match delta {
-      ScrollDelta::Pixels { x, y } => [*x, *y],
-      ScrollDelta::Lines { x, y } => {
-        let step = self.layout_config.line_height * 3.0;
-        [*x * step, *y * step]
-      }
-    };
-
+    let delta = self.scroll_delta_to_pixels(delta);
     let state = tree.state.downcast_mut::<CodeViewState>();
 
-    let old = state.viewport.scroll_offset;
-
-    let candidate = iced::Vector::new(old.x - delta[0], old.y - delta[1]);
-    state.viewport.scroll_offset = state
-      .scroll_extent
-      .clamp_offset(candidate, state.viewport.content_bounds.size());
-
-    if state.viewport.scroll_offset != old {
-      if let Some(entry) = &mut state.layout_entry {
-        layout_engine::sync_scroll(entry, state.viewport.scroll_offset);
-      }
-
+    if state.try_apply_wheel_delta(delta) {
       shell.request_redraw();
     }
   }
@@ -298,27 +231,20 @@ impl<Message> CodeView<Message> {
   ) {
     let state = tree.state.downcast_mut::<CodeViewState>();
 
-    let request = match &state.pending_measurement_request {
-      Some(request) if state.last_published_measurement_key != Some(request.key) => {
-        Some(request.clone())
-      }
-      _ => None,
-    };
-
-    if let Some(request) = request {
-      state.last_published_measurement_key = Some(request.key);
+    if let Some(request) = state.measurement_request_to_publish() {
       shell.publish((self.on_measure_request)(request));
     }
   }
 }
 
-impl<'a, Message, Theme, Renderer> From<CodeView<Message>> for Element<'a, Message, Theme, Renderer>
+impl<'a, Message, Theme, Renderer> From<CodeView<'a, Message>>
+  for Element<'a, Message, Theme, Renderer>
 where
   Message: 'a,
   Theme: 'a,
   Renderer: 'a + RendererTrait + TextRendererTrait,
 {
-  fn from(code_view: CodeView<Message>) -> Self {
+  fn from(code_view: CodeView<'a, Message>) -> Self {
     Self::new(code_view)
   }
 }

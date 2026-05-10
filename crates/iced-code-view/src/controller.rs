@@ -5,12 +5,10 @@ use std::thread;
 use iced::futures::channel::mpsc as async_mpsc;
 use iced::{Element, Length, Task};
 
-use crate::code_view::CodeView;
+use crate::code_view::{CodeView, CodeViewInputs};
 use crate::document::CodeDocument;
 use crate::layout::LayoutConfig;
-use crate::measurement::{
-  MeasurementKey, MeasurementMode, MeasurementRequest, MeasurementResult, measure_document,
-};
+use crate::measurement::{MeasurementKey, MeasurementRequest, MeasurementResult, measure_document};
 use crate::{TabDisplayPolicy, WrapMode};
 
 pub struct CodeViewController {
@@ -199,7 +197,7 @@ impl CodeViewController {
       return Task::none();
     }
 
-    if !matches!(request.key.mode, MeasurementMode::NoWrapHorizontal) {
+    if !request.key.mode.needs_background_worker() {
       return Task::none();
     }
 
@@ -275,19 +273,24 @@ impl CodeViewController {
     }
   }
 
-  pub fn view<'a, Theme, Renderer>(&self) -> Element<'a, CodeViewMessage, Theme, Renderer>
+  fn widget_inputs(&self) -> CodeViewInputs<'_> {
+    CodeViewInputs {
+      document: &self.document,
+      width: self.width,
+      height: self.height,
+      layout_config: self.layout_config,
+      padding: self.padding,
+      border_radius: self.border_radius,
+      measurement_result: self.measurement_result.as_ref(),
+    }
+  }
+
+  pub fn view<'a, Theme, Renderer>(&'a self) -> Element<'a, CodeViewMessage, Theme, Renderer>
   where
     Theme: 'a,
     Renderer: 'a + iced::advanced::renderer::Renderer + iced::advanced::graphics::text::Renderer,
   {
-    CodeView::new(self.document.clone(), CodeViewMessage::measure_requested)
-      .layout_config(self.layout_config)
-      .width(self.width)
-      .height(self.height)
-      .measurement_result(self.measurement_result.clone())
-      .border_radius(self.border_radius)
-      .padding(self.padding)
-      .into()
+    CodeView::new(self.widget_inputs(), CodeViewMessage::measure_requested).into()
   }
 }
 

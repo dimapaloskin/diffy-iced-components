@@ -1,9 +1,7 @@
-use std::sync::Arc;
-
-use iced::advanced::graphics::text::cosmic_text;
-
-use crate::layout::LayoutKey;
-use crate::measurement::{MeasurementKey, MeasurementRequest};
+use crate::layout::{LayoutKey, LayoutRequest};
+use crate::layout_cache::LayoutCacheEntry;
+use crate::layout_engine;
+use crate::measurement::{MeasurementKey, MeasurementRequest, MeasurementResult};
 use crate::scroll::ScrollExtent;
 use crate::viewport::Viewport;
 
@@ -16,45 +14,68 @@ pub(crate) struct CodeViewState {
   pub(crate) last_published_measurement_key: Option<MeasurementKey>,
 }
 
-pub(crate) struct LayoutCacheEntry {
-  pub(crate) key: LayoutKey,
-  pub(crate) snapshot: LayoutSnapshot,
-  pub(crate) payload: CosmicLayoutPayload,
-  // The real scroll offset lives in Viewport.
-  // This is just the offset already applied to this buffer/snapshot.
-  pub(crate) prepared_scroll_offset: iced::Vector,
-}
+impl CodeViewState {
+  pub(crate) fn update_pending_measurement<'a>(
+    &mut self,
+    request: MeasurementRequest,
+    result: Option<&'a MeasurementResult>,
+  ) -> Option<&'a MeasurementResult> {
+    let fresh_result = result.filter(|result| result.key == request.key);
 
-#[allow(dead_code)]
-pub(crate) struct LayoutSnapshot {
-  pub(crate) text_size: iced::Size,
-  pub(crate) visual_lines: Vec<VisualLineSnapshot>,
-}
+    if fresh_result.is_some() {
+      self.pending_measurement_request = None;
+    } else {
+      self.pending_measurement_request = Some(request);
+    }
 
-#[allow(dead_code)]
-pub(crate) struct VisualLineSnapshot {
-  pub(crate) source_line_index: usize,
-  pub(crate) y: f32,
-  pub(crate) height: f32,
-  pub(crate) width: f32,
-}
+    fresh_result
+  }
 
-pub(crate) struct CosmicLayoutPayload {
-  buffer: Arc<cosmic_text::Buffer>,
-}
+  pub(crate) fn measurement_request_to_publish(&mut self) -> Option<MeasurementRequest> {
+    let request = self.pending_measurement_request.as_ref()?;
 
-impl CosmicLayoutPayload {
-  pub(crate) fn new(buffer: cosmic_text::Buffer) -> Self {
-    Self {
-      buffer: Arc::new(buffer),
+    if self.last_published_measurement_key == Some(request.key) {
+      return None;
+    }
+
+    self.last_published_measurement_key = Some(request.key);
+    Some(request.clone())
+  }
+
+  pub(crate) fn refresh_layout(&mut self, request: LayoutRequest<'_>) {
+    let key = LayoutKey::from_request(&request);
+    let prev = self.layout_entry.take();
+
+    self.layout_entry = match prev {
+      Some(mut prev) if prev.key == key => {
+        if prev.prepared_scroll_offset != request.scroll_offset {
+          layout_engine::sync_scroll(&mut prev, request.scroll_offset);
+        }
+
+        Some(prev)
+      }
+      prev => Some(layout_engine::rebuild_layout(request, key, prev)),
     }
   }
 
-  pub(crate) fn buffer(&self) -> &Arc<cosmic_text::Buffer> {
-    &self.buffer
-  }
+  pub(crate) fn try_apply_wheel_delta(&mut self, delta: iced::Vector) -> bool {
+    let old = self.viewport.scroll_offset;
+    let candidate = iced::Vector::new(old.x - delta.x, old.y - delta.y);
 
-  pub(crate) fn buffer_mut(&mut self) -> &mut cosmic_text::Buffer {
-    Arc::make_mut(&mut self.buffer)
+    let scroll_offset = self
+      .scroll_extent
+      .clamp_offset(candidate, self.viewport.content_bounds.size());
+
+    if scroll_offset == old {
+      return false;
+    }
+
+    self.viewport.scroll_offset = scroll_offset;
+
+    if let Some(entry) = &mut self.layout_entry {
+      layout_engine::sync_scroll(entry, scroll_offset);
+    }
+
+    true
   }
 }

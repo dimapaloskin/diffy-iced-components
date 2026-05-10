@@ -3,6 +3,7 @@ mod controller;
 mod document;
 mod font_lock;
 mod layout;
+mod layout_cache;
 mod layout_engine;
 mod line_index;
 mod measurement;

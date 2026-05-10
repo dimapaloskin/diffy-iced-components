@@ -1,59 +1,29 @@
 use iced::advanced::graphics::text::{self, cosmic_text};
 
-use crate::font_lock::foreground_font_system_write;
+use crate::font_lock;
 use crate::layout::{LayoutKey, LayoutRequest};
-use crate::state::{CosmicLayoutPayload, LayoutCacheEntry, LayoutSnapshot, VisualLineSnapshot};
+use crate::layout_cache::{
+  CosmicLayoutPayload, LayoutCacheEntry, LayoutSnapshot, VisualLineSnapshot,
+};
 
 pub(crate) fn rebuild_layout(
   request: LayoutRequest,
-  previous: Option<LayoutCacheEntry>,
+  key: LayoutKey,
+  prev: Option<LayoutCacheEntry>,
 ) -> LayoutCacheEntry {
-  let mut font_system = foreground_font_system_write();
+  let mut font_system = font_lock::foreground_font_system_write();
+  let raw_fs = font_system.raw();
 
-  let needs_set_text = previous
-    .as_ref()
-    .is_none_or(|entry| entry.key.text_revision != request.document.id());
-
-  let needs_update_attrs = previous.as_ref().is_some_and(|entry| {
-    entry.key.text_revision == request.document.id() && entry.key.font != request.config.font
-  });
-
-  let raw_font_system = font_system.raw();
-  let metrics = cosmic_text::Metrics::new(request.config.font_size, request.config.line_height);
-
-  let mut payload = previous.map(|entry| entry.payload).unwrap_or_else(|| {
-    let buffer = cosmic_text::Buffer::new(raw_font_system, metrics);
-
-    CosmicLayoutPayload::new(buffer)
-  });
+  let prev_key = prev.as_ref().map(|entry| entry.key);
+  let metrics = metrics_from_request(&request);
+  let mut payload = take_or_create_payload(prev, raw_fs, metrics);
 
   let buffer = payload.buffer_mut();
 
-  buffer.set_wrap(request.config.wrap_mode.to_cosmic());
-  buffer.set_metrics_and_size(
-    metrics,
-    Some(request.content_size.width),
-    Some(request.content_size.height),
-  );
-  buffer.set_tab_width(request.config.tab_display_policy.spaces_per_tab().into());
+  sync_buffer_config(buffer, &request, metrics);
+  sync_buffer_text(buffer, &request, prev_key);
 
-  let attrs = text::to_attributes(request.config.font);
-
-  if needs_set_text {
-    buffer.set_text(
-      request.document.text(),
-      &attrs,
-      cosmic_text::Shaping::Advanced,
-      None,
-    );
-  } else if needs_update_attrs {
-    update_plain_attrs(buffer, &attrs);
-  }
-
-  let snapshot = sync_buffer_scroll_and_snapshot(buffer, raw_font_system, request.scroll_offset);
-
-  let key = LayoutKey::from_request(&request);
-
+  let snapshot = sync_buffer_scroll_and_snapshot(buffer, raw_fs, request.scroll_offset);
   LayoutCacheEntry {
     key,
     snapshot,
@@ -67,13 +37,80 @@ pub(crate) fn sync_scroll(entry: &mut LayoutCacheEntry, scroll_offset: iced::Vec
     return;
   }
 
-  let mut font_system = foreground_font_system_write();
+  let mut font_system = font_lock::foreground_font_system_write();
 
-  let raw_font_system = font_system.raw();
+  let raw_fs = font_system.raw();
   let buffer = entry.payload.buffer_mut();
 
-  entry.snapshot = sync_buffer_scroll_and_snapshot(buffer, raw_font_system, scroll_offset);
+  entry.snapshot = sync_buffer_scroll_and_snapshot(buffer, raw_fs, scroll_offset);
   entry.prepared_scroll_offset = scroll_offset;
+}
+
+fn metrics_from_request(request: &LayoutRequest<'_>) -> cosmic_text::Metrics {
+  cosmic_text::Metrics::new(request.config.font_size, request.config.line_height)
+}
+
+fn take_or_create_payload(
+  prev: Option<LayoutCacheEntry>,
+  font_system: &mut cosmic_text::FontSystem,
+  metrics: cosmic_text::Metrics,
+) -> CosmicLayoutPayload {
+  prev.map(|entry| entry.payload).unwrap_or_else(|| {
+    let buffer = cosmic_text::Buffer::new(font_system, metrics);
+
+    CosmicLayoutPayload::new(buffer)
+  })
+}
+
+fn sync_buffer_config(
+  buffer: &mut cosmic_text::Buffer,
+  request: &LayoutRequest<'_>,
+  metrics: cosmic_text::Metrics,
+) {
+  buffer.set_wrap(request.config.wrap_mode.to_cosmic());
+  buffer.set_metrics_and_size(
+    metrics,
+    Some(request.content_size.width),
+    Some(request.content_size.height),
+  );
+  buffer.set_tab_width(request.config.tab_display_policy.spaces_per_tab().into());
+}
+
+// Buffer picks up metrics/size/wrap/tab via setters in sync_buffer_config.
+// Only update text and font here — nothing else affects attrs.
+fn sync_buffer_text(
+  buffer: &mut cosmic_text::Buffer,
+  request: &LayoutRequest<'_>,
+  prev_key: Option<LayoutKey>,
+) {
+  let attrs = text::to_attributes(request.config.font);
+
+  if needs_set_text(prev_key, request) {
+    buffer.set_text(
+      request.document.text(),
+      &attrs,
+      cosmic_text::Shaping::Advanced,
+      None,
+    );
+  } else if needs_update_attrs(prev_key, request) {
+    update_plain_attrs(buffer, &attrs);
+  }
+}
+
+fn needs_set_text(prev_key: Option<LayoutKey>, request: &LayoutRequest<'_>) -> bool {
+  prev_key.is_none_or(|key| key.text_revision != request.document.id())
+}
+
+fn needs_update_attrs(prev_key: Option<LayoutKey>, request: &LayoutRequest<'_>) -> bool {
+  prev_key.is_some_and(|key| {
+    key.text_revision == request.document.id() && key.font != request.config.font
+  })
+}
+
+fn update_plain_attrs(buffer: &mut cosmic_text::Buffer, attrs: &cosmic_text::Attrs<'_>) {
+  for line in &mut buffer.lines {
+    line.set_attrs_list(cosmic_text::AttrsList::new(attrs));
+  }
 }
 
 fn sync_buffer_scroll_and_snapshot(
@@ -110,11 +147,5 @@ fn snapshot_from_buffer(buffer: &cosmic_text::Buffer) -> LayoutSnapshot {
   LayoutSnapshot {
     text_size: iced::Size::new(text_width, text_height),
     visual_lines,
-  }
-}
-
-fn update_plain_attrs(buffer: &mut cosmic_text::Buffer, attrs: &cosmic_text::Attrs<'_>) {
-  for line in &mut buffer.lines {
-    line.set_attrs_list(cosmic_text::AttrsList::new(attrs));
   }
 }

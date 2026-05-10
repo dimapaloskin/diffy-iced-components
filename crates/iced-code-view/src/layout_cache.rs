@@ -1,0 +1,48 @@
+use std::sync::Arc;
+
+use iced::advanced::graphics::text::cosmic_text;
+
+use crate::layout::LayoutKey;
+
+pub(crate) struct LayoutCacheEntry {
+  pub(crate) key: LayoutKey,
+  pub(crate) snapshot: LayoutSnapshot,
+  pub(crate) payload: CosmicLayoutPayload,
+  // The real scroll offset lives in Viewport.
+  // This is just the offset already applied to this buffer/snapshot.
+  pub(crate) prepared_scroll_offset: iced::Vector,
+}
+
+#[allow(dead_code)]
+pub(crate) struct LayoutSnapshot {
+  pub(crate) text_size: iced::Size,
+  pub(crate) visual_lines: Vec<VisualLineSnapshot>,
+}
+
+#[allow(dead_code)]
+pub(crate) struct VisualLineSnapshot {
+  pub(crate) source_line_index: usize,
+  pub(crate) y: f32,
+  pub(crate) height: f32,
+  pub(crate) width: f32,
+}
+
+pub(crate) struct CosmicLayoutPayload {
+  buffer: Arc<cosmic_text::Buffer>,
+}
+
+impl CosmicLayoutPayload {
+  pub(crate) fn new(buffer: cosmic_text::Buffer) -> Self {
+    Self {
+      buffer: Arc::new(buffer),
+    }
+  }
+
+  pub(crate) fn buffer(&self) -> &Arc<cosmic_text::Buffer> {
+    &self.buffer
+  }
+
+  pub(crate) fn buffer_mut(&mut self) -> &mut cosmic_text::Buffer {
+    Arc::make_mut(&mut self.buffer)
+  }
+}

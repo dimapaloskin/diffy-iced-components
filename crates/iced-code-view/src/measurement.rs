@@ -1,16 +1,12 @@
-use std::sync::TryLockError;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
-use std::time::{Duration, Instant};
 
 use iced::advanced::graphics::text::{self, cosmic_text};
 
 use crate::document::CodeDocument;
-use crate::font_lock::{font_system_version, foreground_font_lock_requested};
+use crate::font_lock;
 use crate::layout::{LayoutConfig, WrapMode};
 use crate::policies::TabDisplayPolicy;
-
-const FONT_LOCK_BUDGET: Duration = Duration::from_millis(2);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum MeasurementMode {
@@ -26,6 +22,10 @@ impl MeasurementMode {
         content_width_px: quantize_logical_px(resolved_content_width),
       },
     }
+  }
+
+  pub(crate) fn needs_background_worker(self) -> bool {
+    matches!(self, MeasurementMode::NoWrapHorizontal)
   }
 }
 
@@ -43,7 +43,12 @@ impl MeasurementRequest {
     resolved_content_width: f32,
   ) -> Self {
     let mode = MeasurementMode::new(layout_config.wrap_mode, resolved_content_width);
-    let key = MeasurementKey::new(document.id(), layout_config, mode, font_system_version());
+    let key = MeasurementKey::new(
+      document.id(),
+      layout_config,
+      mode,
+      font_lock::font_system_version(),
+    );
 
     Self {
       key,
@@ -135,8 +140,8 @@ fn measure_no_wrap_horizontal(
       return None;
     }
 
-    let chunk = with_worker_font_system(cancel, |font_system| {
-      measure_no_wrap_chunk(&mut buffer, font_system, next_line, cancel)
+    let chunk = font_lock::with_worker_font_system(cancel, |font_system, budget| {
+      measure_no_wrap_chunk(&mut buffer, font_system, budget, next_line, cancel)
     })?;
 
     next_line = chunk.next_line;
@@ -168,10 +173,10 @@ struct ChunkProgress {
 fn measure_no_wrap_chunk(
   buffer: &mut cosmic_text::Buffer,
   font_system: &mut cosmic_text::FontSystem,
+  budget: &font_lock::WorkerFontLockBudget,
   start_line: usize,
   cancel: &AtomicBool,
 ) -> Option<ChunkProgress> {
-  let lock_started_at = Instant::now();
   let mut next_line = start_line;
   let mut max_width: f32 = 0.0;
 
@@ -180,7 +185,7 @@ fn measure_no_wrap_chunk(
       return None;
     }
 
-    if foreground_font_lock_requested() {
+    if font_lock::foreground_font_lock_requested() {
       break;
     }
 
@@ -193,7 +198,7 @@ fn measure_no_wrap_chunk(
       max_width = max_width.max(measure_no_wrap_line_width(buffer, font_system, line_index));
     }
 
-    if next_line < buffer.lines.len() && lock_started_at.elapsed() >= FONT_LOCK_BUDGET {
+    if next_line < buffer.lines.len() && budget.exhausted() {
       break;
     }
   }
@@ -214,43 +219,6 @@ fn measure_no_wrap_line_width(
     .expect("line index is bounded by buffer.lines.len()")
     .iter()
     .fold(0.0_f32, |max_width, line| max_width.max(line.w))
-}
-
-fn with_worker_font_system<T>(
-  cancel: &AtomicBool,
-  mut f: impl FnMut(&mut cosmic_text::FontSystem) -> Option<T>,
-) -> Option<T> {
-  // Do not grow the work done under this lock without a separate decision.
-  // Lightweight foreground reads like `FontSystem::version()` do not raise the
-  // flag and will wait until the worker releases the current write lock.
-  loop {
-    if cancel.load(Ordering::Relaxed) {
-      return None;
-    }
-
-    if foreground_font_lock_requested() {
-      thread::yield_now();
-      continue;
-    }
-
-    match text::font_system().try_write() {
-      Ok(mut font_system) => {
-        if foreground_font_lock_requested() {
-          drop(font_system);
-          thread::yield_now();
-          continue;
-        }
-
-        return f(font_system.raw());
-      }
-      Err(TryLockError::WouldBlock) => {
-        thread::yield_now();
-      }
-      Err(TryLockError::Poisoned(_)) => {
-        panic!("iced shared font system lock should not be poisoned");
-      }
-    }
-  }
 }
 
 fn quantize_logical_px(value: f32) -> u32 {
