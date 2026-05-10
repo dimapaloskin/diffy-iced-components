@@ -1,6 +1,7 @@
 use std::sync::TryLockError;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
+use std::time::{Duration, Instant};
 
 use iced::advanced::graphics::text::{self, cosmic_text};
 
@@ -8,6 +9,8 @@ use crate::document::CodeDocument;
 use crate::font_lock::{font_system_version, foreground_font_lock_requested};
 use crate::layout::{LayoutConfig, WrapMode};
 use crate::policies::TabDisplayPolicy;
+
+const FONT_LOCK_BUDGET: Duration = Duration::from_millis(2);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum MeasurementMode {
@@ -116,114 +119,106 @@ fn measure_no_wrap_horizontal(
   request: MeasurementRequest,
   cancel: &AtomicBool,
 ) -> Option<MeasurementResult> {
-  let key = request.key;
-  let mut line_measurer = NoWrapLineMeasurer::new(request.layout_config);
+  let MeasurementRequest {
+    key,
+    document,
+    layout_config,
+  } = request;
+  let mut buffer = build_no_wrap_buffer(layout_config, document.text());
 
   let mut max_width: f32 = 0.0;
+  let mut next_line = 0;
+  let line_count = buffer.lines.len();
 
-  for line_index in 0..request.document.source_line_count() {
+  while next_line < line_count {
     if cancel.load(Ordering::Relaxed) {
       return None;
     }
 
-    let line = request
-      .document
-      .source_line_text(line_index)
-      .unwrap_or_default();
+    let chunk = with_worker_font_system(cancel, |font_system| {
+      measure_no_wrap_chunk(&mut buffer, font_system, next_line, cancel)
+    })?;
 
-    if line.is_empty() {
-      thread::yield_now();
-      continue;
-    }
-
-    max_width = max_width.max(line_measurer.measure_line_width(line, cancel)?);
-
+    next_line = chunk.next_line;
+    max_width = max_width.max(chunk.max_width);
     thread::yield_now();
   }
 
   Some(MeasurementResult::no_wrap_horizontal_extent(key, max_width))
 }
 
-struct NoWrapLineMeasurer {
-  shape: Option<cosmic_text::ShapeLine>,
-  layout_scratch: cosmic_text::ShapeBuffer,
-  layout_lines: Vec<cosmic_text::LayoutLine>,
-  attrs_list: cosmic_text::AttrsList,
-  font_size: f32,
-  tab_width: u16,
+fn build_no_wrap_buffer(layout_config: LayoutConfig, text: &str) -> cosmic_text::Buffer {
+  let metrics = cosmic_text::Metrics::new(layout_config.font_size, layout_config.line_height);
+  let attrs = text::to_attributes(layout_config.font);
+  let mut buffer = cosmic_text::Buffer::new_empty(metrics);
+
+  buffer.set_wrap(cosmic_text::Wrap::None);
+  buffer.set_tab_width(layout_config.tab_display_policy.spaces_per_tab().into());
+  buffer.set_text(text, &attrs, cosmic_text::Shaping::Advanced, None);
+
+  buffer
 }
 
-impl NoWrapLineMeasurer {
-  fn new(layout_config: LayoutConfig) -> Self {
-    let attrs = text::to_attributes(layout_config.font);
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct ChunkProgress {
+  next_line: usize,
+  max_width: f32,
+}
 
-    Self {
-      shape: None,
-      layout_scratch: cosmic_text::ShapeBuffer::default(),
-      layout_lines: Vec::new(),
-      attrs_list: cosmic_text::AttrsList::new(&attrs),
-      font_size: layout_config.font_size,
-      tab_width: layout_config.tab_display_policy.spaces_per_tab().into(),
-    }
-  }
+fn measure_no_wrap_chunk(
+  buffer: &mut cosmic_text::Buffer,
+  font_system: &mut cosmic_text::FontSystem,
+  start_line: usize,
+  cancel: &AtomicBool,
+) -> Option<ChunkProgress> {
+  let lock_started_at = Instant::now();
+  let mut next_line = start_line;
+  let mut max_width: f32 = 0.0;
 
-  fn measure_line_width(&mut self, line: &str, cancel: &AtomicBool) -> Option<f32> {
+  while next_line < buffer.lines.len() {
     if cancel.load(Ordering::Relaxed) {
       return None;
     }
 
-    with_worker_font_system(cancel, |font_system| match &mut self.shape {
-      Some(shape) => shape.build(
-        font_system,
-        line,
-        &self.attrs_list,
-        cosmic_text::Shaping::Advanced,
-        self.tab_width,
-      ),
-      None => {
-        self.shape = Some(cosmic_text::ShapeLine::new(
-          font_system,
-          line,
-          &self.attrs_list,
-          cosmic_text::Shaping::Advanced,
-          self.tab_width,
-        ));
-      }
-    })?;
-
-    if cancel.load(Ordering::Relaxed) {
-      return None;
+    if foreground_font_lock_requested() {
+      break;
     }
 
-    let shape = self
-      .shape
-      .as_ref()
-      .expect("line shape should be initialized after successful measurement");
+    let line_index = next_line;
+    let is_empty = buffer.lines[line_index].text().is_empty();
 
-    shape.layout_to_buffer(
-      &mut self.layout_scratch,
-      self.font_size,
-      None,
-      cosmic_text::Wrap::None,
-      cosmic_text::Ellipsize::None,
-      None,
-      &mut self.layout_lines,
-      None,
-      cosmic_text::Hinting::default(),
-    );
+    next_line += 1;
 
-    Some(
-      self
-        .layout_lines
-        .iter()
-        .fold(0.0_f32, |max_width, line| max_width.max(line.w)),
-    )
+    if !is_empty {
+      max_width = max_width.max(measure_no_wrap_line_width(buffer, font_system, line_index));
+    }
+
+    if next_line < buffer.lines.len() && lock_started_at.elapsed() >= FONT_LOCK_BUDGET {
+      break;
+    }
   }
+
+  Some(ChunkProgress {
+    next_line,
+    max_width,
+  })
+}
+
+fn measure_no_wrap_line_width(
+  buffer: &mut cosmic_text::Buffer,
+  font_system: &mut cosmic_text::FontSystem,
+  line_index: usize,
+) -> f32 {
+  buffer
+    .line_layout(font_system, line_index)
+    .expect("line index is bounded by buffer.lines.len()")
+    .iter()
+    .fold(0.0_f32, |max_width, line| max_width.max(line.w))
 }
 
 fn with_worker_font_system<T>(
   cancel: &AtomicBool,
-  mut f: impl FnMut(&mut cosmic_text::FontSystem) -> T,
+  mut f: impl FnMut(&mut cosmic_text::FontSystem) -> Option<T>,
 ) -> Option<T> {
   // Do not grow the work done under this lock without a separate decision.
   // Lightweight foreground reads like `FontSystem::version()` do not raise the
@@ -246,7 +241,7 @@ fn with_worker_font_system<T>(
           continue;
         }
 
-        return Some(f(font_system.raw()));
+        return f(font_system.raw());
       }
       Err(TryLockError::WouldBlock) => {
         thread::yield_now();

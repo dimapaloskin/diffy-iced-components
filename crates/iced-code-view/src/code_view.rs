@@ -161,7 +161,7 @@ where
       Some(measurement_request)
     };
 
-    let scroll_extent = ScrollExtent::for_document(
+    let scroll_extent = ScrollExtent::new(
       &self.document,
       self.layout_config.wrap_mode,
       self.layout_config.line_height,

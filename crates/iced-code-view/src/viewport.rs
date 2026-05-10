@@ -1,6 +1,5 @@
 #[derive(Default)]
 pub(crate) struct Viewport {
-  pub(crate) widget_size: iced::Size,
   pub(crate) content_bounds: iced::Rectangle,
   pub(crate) scroll_offset: iced::Vector,
 }
@@ -15,7 +14,6 @@ impl Viewport {
     let height = (widget_size.height - padding.top - padding.bottom).max(0.0);
 
     Self {
-      widget_size,
       content_bounds: iced::Rectangle {
         x: padding.left,
         y: padding.top,

@@ -41,10 +41,12 @@ impl LineIndex {
     self.line_starts.len()
   }
 
+  #[allow(dead_code)]
   pub(crate) fn line_start(&self, line_index: usize) -> Option<usize> {
     self.line_starts.get(line_index).copied()
   }
 
+  #[allow(dead_code)]
   pub(crate) fn byte_range_for_lines(&self, lines: Range<usize>) -> Option<Range<usize>> {
     if lines.start > lines.end || lines.end > self.line_count() {
       return None;
@@ -60,6 +62,7 @@ impl LineIndex {
     Some(start..end)
   }
 
+  #[allow(dead_code)]
   pub(crate) fn line_for_byte(&self, byte_offset: usize) -> Option<usize> {
     if byte_offset > self.text_len {
       return None;

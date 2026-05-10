@@ -25,11 +25,13 @@ pub(crate) struct LayoutCacheEntry {
   pub(crate) prepared_scroll_offset: iced::Vector,
 }
 
+#[allow(dead_code)]
 pub(crate) struct LayoutSnapshot {
   pub(crate) text_size: iced::Size,
   pub(crate) visual_lines: Vec<VisualLineSnapshot>,
 }
 
+#[allow(dead_code)]
 pub(crate) struct VisualLineSnapshot {
   pub(crate) source_line_index: usize,
   pub(crate) y: f32,

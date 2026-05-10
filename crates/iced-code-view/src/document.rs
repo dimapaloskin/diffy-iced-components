@@ -52,28 +52,9 @@ impl CodeDocument {
     self.data.line_index.line_count()
   }
 
-  pub(crate) fn source_line_text(&self, line_index: usize) -> Option<&str> {
-    let line_end = line_index.checked_add(1)?;
-    let range = self
-      .data
-      .line_index
-      .byte_range_for_lines(line_index..line_end)?;
-
-    self.data.text.get(range).map(strip_source_line_ending)
-  }
-
   fn next_document_id() -> u64 {
     NEXT_DOCUMENT_ID.fetch_add(1, Ordering::Relaxed)
   }
-}
-
-fn strip_source_line_ending(line: &str) -> &str {
-  line
-    .strip_suffix("\r\n")
-    .or_else(|| line.strip_suffix("\n\r"))
-    .or_else(|| line.strip_suffix('\n'))
-    .or_else(|| line.strip_suffix('\r'))
-    .unwrap_or(line)
 }
 
 pub(crate) struct CodeDocumentData {
@@ -91,23 +72,5 @@ impl fmt::Debug for CodeDocumentData {
       .field("source_line_count", &self.line_index.line_count())
       .field("line_ending_policy", &self.line_ending_policy)
       .finish()
-  }
-}
-
-#[cfg(test)]
-mod tests {
-  use super::*;
-
-  #[test]
-  fn source_line_text_strips_supported_line_endings() {
-    let document = CodeDocument::new("a\r\nb\n\rc\rd\n");
-
-    assert_eq!(document.source_line_count(), 5);
-    assert_eq!(document.source_line_text(0), Some("a"));
-    assert_eq!(document.source_line_text(1), Some("b"));
-    assert_eq!(document.source_line_text(2), Some("c"));
-    assert_eq!(document.source_line_text(3), Some("d"));
-    assert_eq!(document.source_line_text(4), Some(""));
-    assert_eq!(document.source_line_text(5), None);
   }
 }
