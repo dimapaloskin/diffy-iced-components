@@ -6,13 +6,13 @@ use iced::futures::channel::mpsc as async_mpsc;
 use iced::{Element, Length, Task};
 
 use crate::code_view::{CodeView, CodeViewInputs};
-use crate::document::CodeDocument;
+use crate::document::Document;
 use crate::layout::LayoutConfig;
 use crate::measurement::{MeasurementKey, MeasurementRequest, MeasurementResult, measure_document};
 use crate::{TabDisplayPolicy, WrapMode};
 
 pub struct CodeViewController {
-  document: CodeDocument,
+  document: Document,
   width: Length,
   height: Length,
   layout_config: LayoutConfig,
@@ -96,7 +96,7 @@ impl OpenedDocumentKey {
 }
 
 impl CodeViewController {
-  pub fn new(document: CodeDocument) -> Self {
+  pub fn new(document: Document) -> Self {
     Self {
       document,
       width: Length::Fill,
@@ -163,7 +163,7 @@ impl CodeViewController {
     open_document_task(self.session_id, self.document.clone())
   }
 
-  pub fn set_document(&mut self, document: CodeDocument) -> Task<CodeViewMessage> {
+  pub fn set_document(&mut self, document: Document) -> Task<CodeViewMessage> {
     self.cancel_active_measurement();
 
     self.document = document;
@@ -298,7 +298,7 @@ fn next_session_id() -> u64 {
   NEXT_SESSION_ID.fetch_add(1, Ordering::Relaxed)
 }
 
-fn open_document_task(session_id: u64, document: CodeDocument) -> Task<CodeViewMessage> {
+fn open_document_task(session_id: u64, document: Document) -> Task<CodeViewMessage> {
   background_optional_job(move || {
     let key = OpenedDocumentKey::new(session_id, document.id());
     Some(CodeViewMessage::document_opened(key))

@@ -8,7 +8,7 @@ use iced::advanced::widget;
 use iced::advanced::{layout, renderer::Renderer as RendererTrait, widget::Widget};
 use iced::mouse::ScrollDelta;
 
-use crate::document::CodeDocument;
+use crate::document::Document;
 use crate::layout::LayoutConfig;
 use crate::layout::LayoutRequest;
 use crate::measurement::{MeasurementRequest, MeasurementResult};
@@ -22,7 +22,7 @@ pub(crate) struct CodeView<'a, Message> {
 }
 
 pub(crate) struct CodeViewInputs<'a> {
-  pub(crate) document: &'a CodeDocument,
+  pub(crate) document: &'a Document,
   pub(crate) width: Length,
   pub(crate) height: Length,
   pub(crate) layout_config: LayoutConfig,

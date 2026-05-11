@@ -3,7 +3,7 @@ use std::thread;
 
 use iced::advanced::graphics::text::{self, cosmic_text};
 
-use crate::document::CodeDocument;
+use crate::document::Document;
 use crate::font_lock;
 use crate::layout::{LayoutConfig, WrapMode};
 use crate::policies::TabDisplayPolicy;
@@ -32,13 +32,13 @@ impl MeasurementMode {
 #[derive(Debug, Clone)]
 pub(crate) struct MeasurementRequest {
   pub(crate) key: MeasurementKey,
-  pub(crate) document: CodeDocument,
+  pub(crate) document: Document,
   pub(crate) layout_config: LayoutConfig,
 }
 
 impl MeasurementRequest {
   pub(crate) fn new(
-    document: &CodeDocument,
+    document: &Document,
     layout_config: LayoutConfig,
     resolved_content_width: f32,
   ) -> Self {

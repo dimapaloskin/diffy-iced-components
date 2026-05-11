@@ -1,7 +1,7 @@
 use iced::widget::{button, column, container, row, text};
 use iced::{Element, Length, Task, alignment, padding};
 
-use iced_code_view::{CodeDocument, CodeViewController, CodeViewMessage};
+use iced_code_view::{CodeViewController, CodeViewMessage, Document};
 
 const FILES: &[(&str, &str)] = &[
   ("demo_1.rs", include_str!("../assets/files/demo_1.rs")),
@@ -26,7 +26,7 @@ struct App {
 
 impl App {
   fn new() -> (Self, Task<AppMessage>) {
-    let code_view = CodeViewController::new(CodeDocument::new(FILES[0].1))
+    let code_view = CodeViewController::new(Document::new(FILES[0].1))
       .border_radius(iced::border::radius(12.0))
       .padding(padding::horizontal(10.0));
 
@@ -48,7 +48,7 @@ impl App {
         self.selected_file = index;
         self
           .code_view
-          .set_document(CodeDocument::new(FILES[index].1))
+          .set_document(Document::new(FILES[index].1))
           .map(AppMessage::CodeView)
       }
     }

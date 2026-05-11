@@ -1,5 +1,5 @@
 use crate::measurement::{MeasurementOutput, MeasurementResult};
-use crate::{CodeDocument, WrapMode};
+use crate::{Document, WrapMode};
 
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub(crate) struct ScrollExtent {
@@ -9,7 +9,7 @@ pub(crate) struct ScrollExtent {
 
 impl ScrollExtent {
   pub(crate) fn new(
-    document: &CodeDocument,
+    document: &Document,
     wrap_mode: WrapMode,
     line_height: f32,
     measurement_result: Option<&MeasurementResult>,
@@ -117,7 +117,7 @@ mod tests {
 
   #[test]
   fn no_wrap_extent_counts_trailing_empty_source_line() {
-    let document = CodeDocument::new("a\n");
+    let document = Document::new("a\n");
 
     assert_eq!(
       ScrollExtent::new(&document, WrapMode::NoWrap, 20.0, None).vertical,
@@ -127,7 +127,7 @@ mod tests {
 
   #[test]
   fn no_wrap_horizontal_extent_stays_unknown_without_measurement() {
-    let document = CodeDocument::new("a very long line");
+    let document = Document::new("a very long line");
 
     assert_eq!(
       ScrollExtent::new(&document, WrapMode::NoWrap, 20.0, None).horizontal,
@@ -139,7 +139,7 @@ mod tests {
   fn no_wrap_horizontal_extent_uses_measurement_result() {
     use crate::layout::LayoutConfig;
 
-    let document = CodeDocument::new("short\nlonger line");
+    let document = Document::new("short\nlonger line");
     let request =
       crate::measurement::MeasurementRequest::new(&document, LayoutConfig::default(), 300.0);
     let result = MeasurementResult::no_wrap_horizontal_extent(request.key, 1234.0);
@@ -152,7 +152,7 @@ mod tests {
 
   #[test]
   fn soft_wrap_extent_stays_unknown_until_wrapped_measurement_exists() {
-    let document = CodeDocument::new("a very long line that may wrap later");
+    let document = Document::new("a very long line that may wrap later");
 
     assert_eq!(
       ScrollExtent::new(&document, WrapMode::SoftWrap, 20.0, None),

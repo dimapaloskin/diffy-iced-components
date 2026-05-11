@@ -1,6 +1,6 @@
 use iced::advanced::graphics::text::cosmic_text;
 
-use crate::{TabDisplayPolicy, document::CodeDocument};
+use crate::{TabDisplayPolicy, document::Document};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum WrapMode {
@@ -67,7 +67,7 @@ impl LayoutKey {
 }
 
 pub(crate) struct LayoutRequest<'a> {
-  pub(crate) document: &'a CodeDocument,
+  pub(crate) document: &'a Document,
   pub(crate) content_size: iced::Size,
   pub(crate) scroll_offset: iced::Vector,
   pub(crate) config: LayoutConfig,

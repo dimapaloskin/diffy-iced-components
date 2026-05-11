@@ -13,6 +13,6 @@ mod state;
 mod viewport;
 
 pub use controller::{CodeViewController, CodeViewMessage};
-pub use document::CodeDocument;
+pub use document::Document;
 pub use layout::WrapMode;
 pub use policies::{LineEndingPolicy, TabDisplayPolicy};

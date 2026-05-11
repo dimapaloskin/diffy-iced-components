@@ -9,11 +9,11 @@ use crate::policies::LineEndingPolicy;
 static NEXT_DOCUMENT_ID: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Debug, Clone)]
-pub struct CodeDocument {
-  data: Arc<CodeDocumentData>,
+pub struct Document {
+  data: Arc<DocumentData>,
 }
 
-impl CodeDocument {
+impl Document {
   pub fn new(text: impl Into<String>) -> Self {
     // TODO: line ending should be auto-detected
     Self::with_line_ending_policy(text, LineEndingPolicy::default())
@@ -27,7 +27,7 @@ impl CodeDocument {
     let line_index = LineIndex::new(&text);
 
     Self {
-      data: Arc::new(CodeDocumentData {
+      data: Arc::new(DocumentData {
         id: Self::next_document_id(),
         text,
         line_ending_policy,
@@ -57,14 +57,14 @@ impl CodeDocument {
   }
 }
 
-pub(crate) struct CodeDocumentData {
+pub(crate) struct DocumentData {
   id: u64,
   text: String,
   line_ending_policy: LineEndingPolicy,
   line_index: LineIndex,
 }
 
-impl fmt::Debug for CodeDocumentData {
+impl fmt::Debug for DocumentData {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     f.debug_struct("CodeDocumentData")
       .field("id", &self.id)
