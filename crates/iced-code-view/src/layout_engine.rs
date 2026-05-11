@@ -2,9 +2,9 @@ use iced::advanced::graphics::text::{self, cosmic_text};
 
 use crate::font_lock;
 use crate::layout::{LayoutKey, LayoutRequest};
-use crate::layout_cache::{
-  CosmicLayoutPayload, LayoutCacheEntry, LayoutSnapshot, VisualLineSnapshot,
-};
+use crate::layout_cache::{CosmicLayoutPayload, LayoutCacheEntry};
+use crate::projection::LayoutProjection;
+use crate::source_line::SourceLineHeights;
 
 pub(crate) fn rebuild_layout(
   request: LayoutRequest,
@@ -23,17 +23,18 @@ pub(crate) fn rebuild_layout(
   sync_buffer_config(buffer, &request, metrics);
   sync_buffer_text(buffer, &request, prev_key);
 
-  let snapshot = sync_buffer_scroll_and_snapshot(buffer, raw_fs, request.scroll_offset);
+  let projection = sync_buffer_scroll_and_projection(buffer, raw_fs, &request);
+
   LayoutCacheEntry {
     key,
-    snapshot,
+    projection,
     payload,
-    prepared_scroll_offset: request.scroll_offset,
+    prepared_document_scroll_y: request.scroll_offset.y,
   }
 }
 
-pub(crate) fn sync_scroll(entry: &mut LayoutCacheEntry, scroll_offset: iced::Vector) {
-  if entry.prepared_scroll_offset == scroll_offset {
+pub(crate) fn scroll_to(entry: &mut LayoutCacheEntry, request: &LayoutRequest<'_>) {
+  if entry.prepared_document_scroll_y == request.scroll_offset.y {
     return;
   }
 
@@ -42,8 +43,8 @@ pub(crate) fn sync_scroll(entry: &mut LayoutCacheEntry, scroll_offset: iced::Vec
   let raw_fs = font_system.raw();
   let buffer = entry.payload.buffer_mut();
 
-  entry.snapshot = sync_buffer_scroll_and_snapshot(buffer, raw_fs, scroll_offset);
-  entry.prepared_scroll_offset = scroll_offset;
+  entry.projection = sync_buffer_scroll_and_projection(buffer, raw_fs, request);
+  entry.prepared_document_scroll_y = request.scroll_offset.y;
 }
 
 fn metrics_from_request(request: &LayoutRequest<'_>) -> cosmic_text::Metrics {
@@ -113,39 +114,16 @@ fn update_plain_attrs(buffer: &mut cosmic_text::Buffer, attrs: &cosmic_text::Att
   }
 }
 
-fn sync_buffer_scroll_and_snapshot(
+fn sync_buffer_scroll_and_projection(
   buffer: &mut cosmic_text::Buffer,
   font_system: &mut cosmic_text::FontSystem,
-  scroll_offset: iced::Vector,
-) -> LayoutSnapshot {
-  // `layout_runs()` accounts for `Scroll::vertical` when choosing visible lines,
-  // but glyph `x` positions stay relative to the start of each line.
-  // Keep horizontal at zero here and apply `scroll_offset.x` in draw translation.
-  buffer.set_scroll(cosmic_text::Scroll::new(0, scroll_offset.y, 0.0));
+  request: &LayoutRequest<'_>,
+) -> LayoutProjection {
+  let source_line_heights = SourceLineHeights::for_request(request);
+  let source_offset = source_line_heights.resolve_document_y(request.scroll_offset.y);
+
+  buffer.set_scroll(source_offset.to_cosmic_scroll());
   buffer.shape_until_scroll(font_system, false);
 
-  snapshot_from_buffer(buffer)
-}
-
-fn snapshot_from_buffer(buffer: &cosmic_text::Buffer) -> LayoutSnapshot {
-  let mut text_width: f32 = 0.0;
-  let mut text_height: f32 = 0.0;
-  let mut visual_lines = Vec::new();
-
-  for run in buffer.layout_runs() {
-    text_width = text_width.max(run.line_w);
-    text_height += run.line_height;
-
-    visual_lines.push(VisualLineSnapshot {
-      source_line_index: run.line_i,
-      y: run.line_top,
-      height: run.line_height,
-      width: run.line_w,
-    });
-  }
-
-  LayoutSnapshot {
-    text_size: iced::Size::new(text_width, text_height),
-    visual_lines,
-  }
+  LayoutProjection::build(buffer, &source_line_heights, request.content_size)
 }

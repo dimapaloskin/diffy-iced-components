@@ -48,10 +48,7 @@ impl CodeViewState {
 
     self.layout_entry = match prev {
       Some(mut prev) if prev.key == key => {
-        if prev.prepared_scroll_offset != request.scroll_offset {
-          layout_engine::sync_scroll(&mut prev, request.scroll_offset);
-        }
-
+        layout_engine::scroll_to(&mut prev, &request);
         Some(prev)
       }
       prev => Some(layout_engine::rebuild_layout(request, key, prev)),
@@ -71,11 +68,6 @@ impl CodeViewState {
     }
 
     self.viewport.scroll_offset = scroll_offset;
-
-    if let Some(entry) = &mut self.layout_entry {
-      layout_engine::sync_scroll(entry, scroll_offset);
-    }
-
     true
   }
 }

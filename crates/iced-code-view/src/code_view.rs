@@ -220,6 +220,7 @@ impl<'a, Message> CodeView<'a, Message> {
     let state = tree.state.downcast_mut::<CodeViewState>();
 
     if state.try_apply_wheel_delta(delta) {
+      shell.invalidate_layout();
       shell.request_redraw();
     }
   }

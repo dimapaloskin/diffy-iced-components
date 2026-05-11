@@ -8,7 +8,9 @@ mod layout_engine;
 mod line_index;
 mod measurement;
 mod policies;
+mod projection;
 mod scroll;
+mod source_line;
 mod state;
 mod viewport;
 

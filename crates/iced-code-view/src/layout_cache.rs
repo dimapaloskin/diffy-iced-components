@@ -3,28 +3,15 @@ use std::sync::Arc;
 use iced::advanced::graphics::text::cosmic_text;
 
 use crate::layout::LayoutKey;
+use crate::projection::LayoutProjection;
 
 pub(crate) struct LayoutCacheEntry {
   pub(crate) key: LayoutKey,
-  pub(crate) snapshot: LayoutSnapshot,
+  pub(crate) projection: LayoutProjection,
   pub(crate) payload: CosmicLayoutPayload,
   // The real scroll offset lives in Viewport.
-  // This is just the offset already applied to this buffer/snapshot.
-  pub(crate) prepared_scroll_offset: iced::Vector,
-}
-
-#[allow(dead_code)]
-pub(crate) struct LayoutSnapshot {
-  pub(crate) text_size: iced::Size,
-  pub(crate) visual_lines: Vec<VisualLineSnapshot>,
-}
-
-#[allow(dead_code)]
-pub(crate) struct VisualLineSnapshot {
-  pub(crate) source_line_index: usize,
-  pub(crate) y: f32,
-  pub(crate) height: f32,
-  pub(crate) width: f32,
+  // This is just the Y offset already applied to this buffer/projection.
+  pub(crate) prepared_document_scroll_y: f32,
 }
 
 pub(crate) struct CosmicLayoutPayload {
