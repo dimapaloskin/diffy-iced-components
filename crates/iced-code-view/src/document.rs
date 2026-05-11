@@ -66,7 +66,7 @@ pub(crate) struct DocumentData {
 
 impl fmt::Debug for DocumentData {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    f.debug_struct("CodeDocumentData")
+    f.debug_struct("DocumentData")
       .field("id", &self.id)
       .field("text_len", &self.text.len())
       .field("source_line_count", &self.line_index.line_count())
