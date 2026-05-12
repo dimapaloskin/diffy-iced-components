@@ -1,25 +1,29 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::thread;
 
-use iced::futures::channel::mpsc as async_mpsc;
 use iced::{Element, Length, Task};
 
+use crate::background;
 use crate::code_view::{CodeView, CodeViewInputs};
 use crate::document::Document;
-use crate::layout::LayoutConfig;
+use crate::gutter::GutterConfig;
+use crate::layout::{LayoutConfig, WrapMode};
 use crate::measurement::{MeasurementKey, MeasurementRequest, MeasurementResult, measure_document};
-use crate::{TabDisplayPolicy, WrapMode};
+use crate::padding::CodeViewPadding;
+use crate::policies::TabDisplayPolicy;
+use crate::style::CodeViewStyle;
 
 pub struct CodeViewController {
   document: Document,
   width: Length,
   height: Length,
   layout_config: LayoutConfig,
-  padding: iced::padding::Padding,
+  padding: CodeViewPadding,
   border_radius: iced::border::Radius,
   session_id: u64,
-  opened_document: Option<OpenedDocumentState>,
+  gutter_config: GutterConfig,
+  style: CodeViewStyle,
+
   measurement_result: Option<MeasurementResult>,
   active_measurement: Option<ActiveMeasurementJob>,
 }
@@ -44,12 +48,6 @@ pub struct CodeViewMessage {
 }
 
 impl CodeViewMessage {
-  fn document_opened(key: OpenedDocumentKey) -> Self {
-    Self {
-      event: CodeViewEvent::DocumentOpened { key },
-    }
-  }
-
   fn measure_requested(request: MeasurementRequest) -> Self {
     Self {
       event: CodeViewEvent::MeasureRequested { request },
@@ -65,9 +63,6 @@ impl CodeViewMessage {
 
 #[derive(Debug, Clone)]
 enum CodeViewEvent {
-  DocumentOpened {
-    key: OpenedDocumentKey,
-  },
   MeasureRequested {
     request: MeasurementRequest,
   },
@@ -77,24 +72,6 @@ enum CodeViewEvent {
   },
 }
 
-#[derive(Debug, Clone)]
-struct OpenedDocumentState;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct OpenedDocumentKey {
-  session_id: u64,
-  document_id: u64,
-}
-
-impl OpenedDocumentKey {
-  fn new(session_id: u64, document_id: u64) -> Self {
-    Self {
-      session_id,
-      document_id,
-    }
-  }
-}
-
 impl CodeViewController {
   pub fn new(document: Document) -> Self {
     Self {
@@ -102,88 +79,100 @@ impl CodeViewController {
       width: Length::Fill,
       height: Length::Fill,
       layout_config: LayoutConfig::default(),
-      padding: iced::padding::Padding::default(),
+      padding: CodeViewPadding::default(),
       border_radius: iced::border::Radius::default(),
       session_id: next_session_id(),
-      opened_document: None,
+      gutter_config: GutterConfig::default(),
+      style: CodeViewStyle::default(),
 
       measurement_result: None,
       active_measurement: None,
     }
   }
 
-  pub fn width(mut self, width: Length) -> Self {
+  pub fn with_width(mut self, width: Length) -> Self {
     self.width = width;
     self
   }
 
-  pub fn height(mut self, height: Length) -> Self {
+  pub fn with_height(mut self, height: Length) -> Self {
     self.height = height;
     self
   }
 
-  pub fn border_radius(mut self, border_radius: iced::border::Radius) -> Self {
+  pub fn with_border_radius(mut self, border_radius: iced::border::Radius) -> Self {
     self.border_radius = border_radius;
     self
   }
 
-  pub fn padding(mut self, padding: iced::padding::Padding) -> Self {
+  pub fn with_padding(mut self, padding: CodeViewPadding) -> Self {
     self.padding = padding;
     self
   }
 
-  pub fn font(mut self, font: iced::Font) -> Self {
+  pub fn with_font(mut self, font: iced::Font) -> Self {
     self.layout_config.font = font;
     self
   }
 
-  pub fn font_size(mut self, font_size: f32) -> Self {
+  pub fn with_font_size(mut self, font_size: f32) -> Self {
     self.layout_config.font_size = font_size;
     self
   }
 
-  pub fn line_height(mut self, line_height: f32) -> Self {
+  pub fn with_line_height(mut self, line_height: f32) -> Self {
     self.layout_config.line_height = line_height;
     self
   }
 
-  pub fn wrap_mode(mut self, wrap_mode: WrapMode) -> Self {
+  pub fn with_wrap_mode(mut self, wrap_mode: WrapMode) -> Self {
     self.layout_config.wrap_mode = wrap_mode;
     self
   }
 
-  pub fn tab_display_policy(mut self, tab_display_policy: TabDisplayPolicy) -> Self {
+  pub fn with_tab_display_policy(mut self, tab_display_policy: TabDisplayPolicy) -> Self {
     self.layout_config.tab_display_policy = tab_display_policy;
     self
+  }
+
+  pub fn with_gutter_config(mut self, gutter_config: GutterConfig) -> Self {
+    self.gutter_config = gutter_config;
+    self
+  }
+
+  pub fn with_style(mut self, style: CodeViewStyle) -> Self {
+    self.style = style;
+    self
+  }
+
+  pub fn gutter_config(&self) -> GutterConfig {
+    self.gutter_config
+  }
+
+  pub fn set_gutter_config(&mut self, gutter_config: GutterConfig) {
+    self.gutter_config = gutter_config;
+  }
+
+  pub fn style(&self) -> CodeViewStyle {
+    self.style
+  }
+
+  pub fn set_style(&mut self, style: CodeViewStyle) {
+    self.style = style;
   }
 }
 
 impl CodeViewController {
-  pub fn start(&self) -> Task<CodeViewMessage> {
-    open_document_task(self.session_id, self.document.clone())
-  }
-
-  pub fn set_document(&mut self, document: Document) -> Task<CodeViewMessage> {
+  pub fn set_document(&mut self, document: Document) {
     self.cancel_active_measurement();
 
     self.document = document;
     self.session_id = next_session_id();
-    self.opened_document = None;
     self.measurement_result = None;
-
-    self.start()
-  }
-
-  pub fn document_id(&self) -> u64 {
-    self.document.id()
   }
 
   pub fn source_line_count(&self) -> usize {
     self.document.source_line_count()
-  }
-
-  pub fn is_opened(&self) -> bool {
-    self.opened_document.is_some()
   }
 
   fn cancel_active_measurement(&mut self) {
@@ -193,7 +182,7 @@ impl CodeViewController {
   }
 
   fn on_measure_requested(&mut self, request: MeasurementRequest) -> Task<CodeViewMessage> {
-    if request.key.document_id != self.document.id() {
+    if request.key.document_revision != self.document.revision() {
       return Task::none();
     }
 
@@ -245,7 +234,7 @@ impl CodeViewController {
       return Task::none();
     }
 
-    if session_id != self.session_id || result.key.document_id != self.document.id() {
+    if session_id != self.session_id || result.key.document_revision != self.document.revision() {
       return Task::none();
     }
 
@@ -257,15 +246,6 @@ impl CodeViewController {
 
   pub fn update(&mut self, message: CodeViewMessage) -> Task<CodeViewMessage> {
     match message.event {
-      CodeViewEvent::DocumentOpened { key } => {
-        let current_key = OpenedDocumentKey::new(self.session_id, self.document.id());
-
-        if current_key == key {
-          self.opened_document = Some(OpenedDocumentState)
-        }
-
-        Task::none()
-      }
       CodeViewEvent::MeasureRequested { request } => self.on_measure_requested(request),
       CodeViewEvent::MeasurementFinished { session_id, result } => {
         self.on_measurement_finished(session_id, result)
@@ -281,6 +261,8 @@ impl CodeViewController {
       layout_config: self.layout_config,
       padding: self.padding,
       border_radius: self.border_radius,
+      gutter_config: self.gutter_config,
+      style: self.style,
       measurement_result: self.measurement_result.as_ref(),
     }
   }
@@ -298,34 +280,12 @@ fn next_session_id() -> u64 {
   NEXT_SESSION_ID.fetch_add(1, Ordering::Relaxed)
 }
 
-fn open_document_task(session_id: u64, document: Document) -> Task<CodeViewMessage> {
-  background_optional_job(move || {
-    let key = OpenedDocumentKey::new(session_id, document.id());
-    Some(CodeViewMessage::document_opened(key))
-  })
-}
-
-fn background_optional_job<T>(job: impl FnOnce() -> Option<T> + Send + 'static) -> Task<T>
-where
-  T: Send + 'static,
-{
-  let (mut tx, rx) = async_mpsc::channel(1);
-
-  thread::spawn(move || {
-    if let Some(message) = job() {
-      let _ = tx.try_send(message);
-    }
-  });
-
-  Task::stream(rx)
-}
-
 fn measure_document_task(
   session_id: u64,
   request: MeasurementRequest,
   cancel: Arc<AtomicBool>,
 ) -> Task<CodeViewMessage> {
-  background_optional_job(move || {
+  background::spawn_optional(move || {
     measure_document(request, &cancel)
       .map(|result| CodeViewMessage::measurement_finished(session_id, result))
   })

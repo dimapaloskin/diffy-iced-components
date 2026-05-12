@@ -1,40 +1,245 @@
+use crate::gutter::GutterMetrics;
+use crate::padding::CodeViewPadding;
+
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub(crate) struct ViewportArea {
+  pub(crate) bounds: iced::Rectangle,
+  pub(crate) content_bounds: iced::Rectangle,
+}
+
+impl ViewportArea {
+  fn offset(self, widget_bounds: iced::Rectangle) -> Self {
+    Self {
+      bounds: offset_bounds(self.bounds, widget_bounds),
+      content_bounds: offset_bounds(self.content_bounds, widget_bounds),
+    }
+  }
+}
+
 #[derive(Default)]
 pub(crate) struct Viewport {
-  pub(crate) content_bounds: iced::Rectangle,
+  pub(crate) gutter: Option<ViewportArea>,
+  pub(crate) text: ViewportArea,
   pub(crate) scroll_offset: iced::Vector,
 }
 
 impl Viewport {
   pub(crate) fn new(
     widget_size: iced::Size,
-    padding: iced::padding::Padding,
+    padding: CodeViewPadding,
+    gutter: GutterMetrics,
     scroll_offset: iced::Vector,
   ) -> Self {
-    let width = (widget_size.width - padding.left - padding.right).max(0.0);
-    let height = (widget_size.height - padding.top - padding.bottom).max(0.0);
+    let surface_width = widget_size.width.max(0.0);
+    let surface_height = widget_size.height.max(0.0);
+
+    let surface_bounds = iced::Rectangle {
+      x: 0.0,
+      y: 0.0,
+      width: surface_width,
+      height: surface_height,
+    };
+
+    let content_height = (surface_height - padding.top - padding.bottom).max(0.0);
+
+    let gutter_width = if gutter.enabled {
+      gutter.requested_width.min(surface_width).max(0.0)
+    } else {
+      0.0
+    };
+
+    let gutter = (gutter_width > 0.0).then_some(ViewportArea {
+      bounds: iced::Rectangle {
+        x: surface_bounds.x,
+        y: surface_bounds.y,
+        width: gutter_width,
+        height: surface_bounds.height,
+      },
+      content_bounds: iced::Rectangle {
+        x: surface_bounds.x,
+        y: padding.top,
+        width: gutter_width,
+        height: content_height,
+      },
+    });
+
+    let text_bounds = iced::Rectangle {
+      x: surface_bounds.x + gutter_width,
+      y: surface_bounds.y,
+      width: (surface_width - gutter_width).max(0.0),
+      height: surface_bounds.height,
+    };
+
+    let text_content_bounds = iced::Rectangle {
+      x: text_bounds.x + padding.text_left,
+      y: text_bounds.y + padding.top,
+      width: (text_bounds.width - padding.text_left - padding.text_right).max(0.0),
+      height: content_height,
+    };
 
     Self {
-      content_bounds: iced::Rectangle {
-        x: padding.left,
-        y: padding.top,
-        width,
-        height,
+      gutter,
+      text: ViewportArea {
+        bounds: text_bounds,
+        content_bounds: text_content_bounds,
       },
       scroll_offset,
     }
   }
 
-  pub(crate) fn absolute_content_bounds(&self, widget_bounds: iced::Rectangle) -> iced::Rectangle {
-    iced::Rectangle {
-      x: widget_bounds.x + self.content_bounds.x,
-      y: widget_bounds.y + self.content_bounds.y,
-      width: self.content_bounds.width,
-      height: self.content_bounds.height,
-    }
+  pub(crate) fn absolute_gutter(&self, widget_bounds: iced::Rectangle) -> Option<ViewportArea> {
+    self.gutter.map(|area| area.offset(widget_bounds))
+  }
+
+  pub(crate) fn absolute_text_content_bounds(
+    &self,
+    widget_bounds: iced::Rectangle,
+  ) -> iced::Rectangle {
+    offset_bounds(self.text.content_bounds, widget_bounds)
+  }
+
+  pub(crate) fn scroll_viewport_size(&self) -> iced::Size {
+    self.text.content_bounds.size()
   }
 
   pub(crate) fn with_scroll_offset(mut self, scroll_offset: iced::Vector) -> Self {
     self.scroll_offset = scroll_offset;
     self
+  }
+}
+
+fn offset_bounds(bounds: iced::Rectangle, widget_bounds: iced::Rectangle) -> iced::Rectangle {
+  iced::Rectangle {
+    x: widget_bounds.x + bounds.x,
+    y: widget_bounds.y + bounds.y,
+    width: bounds.width,
+    height: bounds.height,
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  fn gutter_metrics() -> GutterMetrics {
+    GutterMetrics {
+      enabled: true,
+      requested_width: 40.0,
+      padding: crate::padding::GutterPadding::ZERO,
+      separator_width: 1.0,
+    }
+  }
+
+  #[test]
+  fn viewport_splits_surface_gutter_text_and_content_bounds() {
+    let viewport = Viewport::new(
+      iced::Size::new(200.0, 100.0),
+      CodeViewPadding {
+        top: 5.0,
+        bottom: 11.0,
+        text_left: 13.0,
+        text_right: 7.0,
+      },
+      gutter_metrics(),
+      iced::Vector::new(3.0, 4.0),
+    );
+
+    assert_eq!(
+      viewport.gutter,
+      Some(ViewportArea {
+        bounds: iced::Rectangle {
+          x: 0.0,
+          y: 0.0,
+          width: 40.0,
+          height: 100.0,
+        },
+        content_bounds: iced::Rectangle {
+          x: 0.0,
+          y: 5.0,
+          width: 40.0,
+          height: 84.0,
+        },
+      })
+    );
+
+    assert_eq!(
+      viewport.text,
+      ViewportArea {
+        bounds: iced::Rectangle {
+          x: 40.0,
+          y: 0.0,
+          width: 160.0,
+          height: 100.0,
+        },
+        content_bounds: iced::Rectangle {
+          x: 53.0,
+          y: 5.0,
+          width: 140.0,
+          height: 84.0,
+        },
+      }
+    );
+
+    assert_eq!(
+      viewport.scroll_viewport_size(),
+      iced::Size::new(140.0, 84.0)
+    );
+    assert_eq!(viewport.scroll_offset, iced::Vector::new(3.0, 4.0));
+  }
+
+  #[test]
+  fn viewport_clamps_gutter_to_surface_width() {
+    let viewport = Viewport::new(
+      iced::Size::new(10.0, 40.0),
+      CodeViewPadding {
+        top: 2.0,
+        bottom: 3.0,
+        text_left: 5.0,
+        text_right: 4.0,
+      },
+      GutterMetrics {
+        requested_width: 100.0,
+        ..gutter_metrics()
+      },
+      iced::Vector::ZERO,
+    );
+
+    assert_eq!(
+      viewport.gutter,
+      Some(ViewportArea {
+        bounds: iced::Rectangle {
+          x: 0.0,
+          y: 0.0,
+          width: 10.0,
+          height: 40.0,
+        },
+        content_bounds: iced::Rectangle {
+          x: 0.0,
+          y: 2.0,
+          width: 10.0,
+          height: 35.0,
+        },
+      })
+    );
+
+    assert_eq!(
+      viewport.text,
+      ViewportArea {
+        bounds: iced::Rectangle {
+          x: 10.0,
+          y: 0.0,
+          width: 0.0,
+          height: 40.0,
+        },
+        content_bounds: iced::Rectangle {
+          x: 15.0,
+          y: 2.0,
+          width: 0.0,
+          height: 35.0,
+        },
+      }
+    );
+
+    assert_eq!(viewport.scroll_viewport_size(), iced::Size::new(0.0, 35.0));
   }
 }

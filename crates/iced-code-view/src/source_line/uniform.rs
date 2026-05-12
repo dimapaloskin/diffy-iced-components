@@ -15,7 +15,7 @@ impl Heights {
   }
 
   pub(crate) fn resolve_document_y(&self, document_y: f32) -> SourceLineOffset {
-    if self.is_invalid() {
+    if self.is_degenerate() {
       return SourceLineOffset {
         source_line_index: 0,
         source_line_start_document_y: 0.0,
@@ -42,7 +42,7 @@ impl Heights {
   }
 
   pub(crate) fn source_line_start_document_y(&self, source_line_index: usize) -> f32 {
-    if self.is_invalid() {
+    if self.is_degenerate() {
       return 0.0;
     }
 
@@ -50,7 +50,7 @@ impl Heights {
     source_line_index.min(max_line) as f32 * self.line_height
   }
 
-  fn is_invalid(&self) -> bool {
+  fn is_degenerate(&self) -> bool {
     self.source_line_count == 0 || self.line_height <= 0.0
   }
 }

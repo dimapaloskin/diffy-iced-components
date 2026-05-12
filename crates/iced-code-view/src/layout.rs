@@ -1,4 +1,4 @@
-use iced::advanced::graphics::text::cosmic_text;
+use iced::advanced::graphics::text::{self, cosmic_text};
 
 use crate::{TabDisplayPolicy, document::Document};
 
@@ -41,23 +41,25 @@ impl Default for LayoutConfig {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct LayoutKey {
-  pub(crate) text_revision: u64,
+  pub(crate) document_revision: u64,
   pub(crate) content_width_bits: u32,
   pub(crate) content_height_bits: u32,
   pub(crate) font_size_bits: u32,
   pub(crate) line_height_bits: u32,
   pub(crate) font: iced::Font,
+  pub(crate) font_system_version: text::Version,
   pub(crate) wrap_mode: WrapMode,
   pub(crate) tab_policy: TabDisplayPolicy,
 }
 
 impl LayoutKey {
-  pub(crate) fn from_request(request: &LayoutRequest) -> Self {
+  pub(crate) fn from_request(request: &LayoutRequest, font_system_version: text::Version) -> Self {
     Self {
-      text_revision: request.document.id(),
+      document_revision: request.document.revision(),
       content_width_bits: request.content_size.width.to_bits(),
       content_height_bits: request.content_size.height.to_bits(),
       font: request.config.font,
+      font_system_version,
       font_size_bits: request.config.font_size.to_bits(),
       line_height_bits: request.config.line_height.to_bits(),
       wrap_mode: request.config.wrap_mode,

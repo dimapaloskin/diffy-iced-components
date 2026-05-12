@@ -45,7 +45,7 @@ impl MeasurementRequest {
   ) -> Self {
     let mode = MeasurementMode::new(layout_config.wrap_mode, resolved_content_width);
     let key = MeasurementKey::new(
-      document.id(),
+      document.revision(),
       layout_config,
       mode,
       font_lock::font_system_version(),
@@ -61,7 +61,7 @@ impl MeasurementRequest {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct MeasurementKey {
-  pub(crate) document_id: u64,
+  pub(crate) document_revision: u64,
   pub(crate) mode: MeasurementMode,
   pub(crate) font: iced::Font,
   pub(crate) font_size_bits: u32,
@@ -72,13 +72,13 @@ pub(crate) struct MeasurementKey {
 
 impl MeasurementKey {
   fn new(
-    document_id: u64,
+    document_revision: u64,
     layout_config: LayoutConfig,
     mode: MeasurementMode,
     font_system_version: text::Version,
   ) -> Self {
     Self {
-      document_id,
+      document_revision,
       mode,
       font: layout_config.font,
       font_size_bits: layout_config.font_size.to_bits(),

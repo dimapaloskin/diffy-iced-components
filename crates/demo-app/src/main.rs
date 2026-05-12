@@ -1,13 +1,22 @@
-use iced::widget::{button, column, container, row, text};
-use iced::{Element, Length, Task, alignment, padding};
+use iced::widget::{button, column, container, row, space, text};
+use iced::{Element, Length, Task, alignment};
 
-use iced_code_view::{CodeViewController, CodeViewMessage, Document};
+use iced_code_view::{
+  CodeViewController, CodeViewMessage, CodeViewPadding, CodeViewStyle, Document, GutterConfig,
+  GutterPadding,
+};
 
 const FILES: &[(&str, &str)] = &[
-  ("demo_1.rs", include_str!("../assets/files/demo_1.rs")),
-  ("demo_2.rs", include_str!("../assets/files/demo_2.rs")),
-  ("demo_3.txt", include_str!("../assets/files/demo_3.txt")),
+  ("demo_1.rs", "./assets/files/demo_1.rs"),
+  ("demo_2.rs", "./assets/files/demo_2.rs"),
+  ("demo_3.txt", "./assets/files/demo_3.txt"),
 ];
+
+fn read_demo_file(index: usize) -> String {
+  let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(FILES[index].1);
+
+  std::fs::read_to_string(path).expect("demo file should be readable")
+}
 
 fn main() -> iced::Result {
   iced::application(App::new, App::update, App::view).run()
@@ -17,6 +26,7 @@ fn main() -> iced::Result {
 enum AppMessage {
   CodeView(CodeViewMessage),
   SelectFile(usize),
+  ToggleLineNumbers,
 }
 
 struct App {
@@ -26,18 +36,35 @@ struct App {
 
 impl App {
   fn new() -> (Self, Task<AppMessage>) {
-    let code_view = CodeViewController::new(Document::new(FILES[0].1))
-      .border_radius(iced::border::radius(12.0))
-      .padding(padding::horizontal(10.0));
+    let gutter_config = GutterConfig {
+      separator_width: 2.0,
+      padding: GutterPadding::symmetric(8.0),
+      ..Default::default()
+    };
 
-    let task = code_view.start().map(AppMessage::CodeView);
+    let style = CodeViewStyle {
+      gutter: iced_code_view::GutterStyle {
+        background_color: iced::Color::TRANSPARENT,
+        separator_color: iced::Color::from_rgb(0.35, 0.35, 0.35),
+        ..Default::default()
+      },
+      background_color: iced::Color::from_rgb(0.129, 0.141, 0.165),
+      ..Default::default()
+    };
+
+    let code_view = CodeViewController::new(Document::new(read_demo_file(0)))
+      .with_border_radius(iced::border::radius(12.0))
+      .with_font_size(15.0)
+      .with_gutter_config(gutter_config)
+      .with_style(style)
+      .with_padding(CodeViewPadding::text_horizontal(8.0));
 
     (
       Self {
         code_view,
         selected_file: 0,
       },
-      task,
+      Task::none(),
     )
   }
 
@@ -48,8 +75,14 @@ impl App {
         self.selected_file = index;
         self
           .code_view
-          .set_document(Document::new(FILES[index].1))
-          .map(AppMessage::CodeView)
+          .set_document(Document::new(read_demo_file(index)));
+        Task::none()
+      }
+      AppMessage::ToggleLineNumbers => {
+        let mut gutter_config = self.code_view.gutter_config();
+        gutter_config.enabled = !gutter_config.enabled;
+        self.code_view.set_gutter_config(gutter_config);
+        Task::none()
       }
     }
   }
@@ -62,23 +95,24 @@ impl App {
         row.push(button(*name).on_press(AppMessage::SelectFile(index)))
       });
 
-    let open_status = if self.code_view.is_opened() {
-      "ready"
+    let gutter_label = if self.code_view.gutter_config().enabled {
+      "line numbers:  on"
     } else {
-      "loading"
+      "line numbers: off"
     };
 
+    let gutter_button = button(gutter_label).on_press(AppMessage::ToggleLineNumbers);
+
     let status = format!(
-      "file: {}, status: {}, lines: {}",
+      "file: {}, lines: {}",
       FILES[self.selected_file].0,
-      open_status,
       self.code_view.source_line_count()
     );
 
     container(
       column![
         text(status).font(iced::Font::MONOSPACE),
-        file_buttons,
+        row![file_buttons, space::horizontal(), gutter_button],
         self.code_view.view().map(AppMessage::CodeView),
       ]
       .spacing(10.0),

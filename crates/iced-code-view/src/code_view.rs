@@ -1,3 +1,5 @@
+mod gutter_draw;
+
 use std::sync::Arc;
 
 use iced::Element;
@@ -9,11 +11,14 @@ use iced::advanced::{layout, renderer::Renderer as RendererTrait, widget::Widget
 use iced::mouse::ScrollDelta;
 
 use crate::document::Document;
+use crate::gutter::{GutterConfig, GutterMeasureRequest, GutterRenderRequest};
 use crate::layout::LayoutConfig;
 use crate::layout::LayoutRequest;
 use crate::measurement::{MeasurementRequest, MeasurementResult};
+use crate::padding::CodeViewPadding;
 use crate::scroll::ScrollExtent;
 use crate::state::CodeViewState;
+use crate::style::CodeViewStyle;
 use crate::viewport::Viewport;
 
 pub(crate) struct CodeView<'a, Message> {
@@ -26,8 +31,10 @@ pub(crate) struct CodeViewInputs<'a> {
   pub(crate) width: Length,
   pub(crate) height: Length,
   pub(crate) layout_config: LayoutConfig,
-  pub(crate) padding: iced::padding::Padding,
+  pub(crate) padding: CodeViewPadding,
   pub(crate) border_radius: iced::border::Radius,
+  pub(crate) gutter_config: GutterConfig,
+  pub(crate) style: CodeViewStyle,
   pub(crate) measurement_result: Option<&'a MeasurementResult>,
 }
 
@@ -89,12 +96,23 @@ where
     _renderer: &Renderer,
     limits: &iced::advanced::layout::Limits,
   ) -> layout::Node {
+    let CodeViewInputs {
+      document,
+      width,
+      height,
+      padding,
+      layout_config,
+      gutter_config,
+      measurement_result,
+      ..
+    } = self.inputs;
+
     let state = tree.state.downcast_mut::<CodeViewState>();
-    let resolved_size = limits.resolve(self.inputs.width, self.inputs.height, iced::Size::ZERO);
+    let resolved_size = limits.resolve(width, height, iced::Size::ZERO);
     let document_changed = state
-      .layout_entry
-      .as_ref()
-      .is_some_and(|entry| entry.key.text_revision != self.inputs.document.id());
+      .layout
+      .entry()
+      .is_some_and(|entry| entry.key.document_revision != self.inputs.document.revision());
 
     // TODO: temporarily reset scroll offset if document changed.
     // In feature consider ability to reset scroll offset to previous value when file re-opened.
@@ -104,37 +122,62 @@ where
       state.viewport.scroll_offset
     };
 
-    let viewport = Viewport::new(resolved_size, self.inputs.padding, scroll_offset);
+    let gutter_metrics = state.gutter.measure(GutterMeasureRequest {
+      document,
+      layout_config,
+      gutter_config,
+    });
+
+    let viewport = Viewport::new(resolved_size, padding, gutter_metrics, scroll_offset);
 
     let measurement_request = MeasurementRequest::new(
-      self.inputs.document,
-      self.inputs.layout_config,
-      viewport.content_bounds.size().width,
+      document,
+      layout_config,
+      viewport.text.content_bounds.size().width,
     );
 
     let measurement_result =
-      state.update_pending_measurement(measurement_request, self.inputs.measurement_result);
+      state.update_pending_measurement(measurement_request, measurement_result);
 
     let scroll_extent = ScrollExtent::new(
-      self.inputs.document,
-      self.inputs.layout_config.wrap_mode,
-      self.inputs.layout_config.line_height,
+      document,
+      layout_config.wrap_mode,
+      layout_config.line_height,
       measurement_result,
     );
 
     let scroll_offset =
-      scroll_extent.clamp_offset(viewport.scroll_offset, viewport.content_bounds.size());
+      scroll_extent.clamp_offset(viewport.scroll_offset, viewport.scroll_viewport_size());
 
     let viewport = viewport.with_scroll_offset(scroll_offset);
 
     let layout_request = LayoutRequest {
-      document: self.inputs.document,
-      content_size: viewport.content_bounds.size(),
+      document,
+      content_size: viewport.text.content_bounds.size(),
       scroll_offset: viewport.scroll_offset,
-      config: self.inputs.layout_config,
+      config: layout_config,
     };
 
-    state.refresh_layout(layout_request);
+    let gutter_size = viewport
+      .gutter
+      .map(|area| area.content_bounds.size())
+      .unwrap_or(iced::Size::ZERO);
+
+    state.layout.refresh(layout_request);
+
+    let layout_entry = state
+      .layout
+      .entry()
+      .expect("layout entry is prepared by layout refresh");
+
+    let gutter_render_request = GutterRenderRequest {
+      layout_config,
+      metrics: gutter_metrics,
+      gutter_size,
+      projection: &layout_entry.projection,
+    };
+
+    state.gutter.refresh(gutter_render_request);
     state.scroll_extent = scroll_extent;
     state.viewport = viewport;
 
@@ -154,9 +197,13 @@ where
     use iced::advanced::renderer::Quad;
 
     let state = tree.state.downcast_ref::<CodeViewState>();
+    let bounds = layout.bounds();
+    let Some(visible_bounds) = bounds.intersection(viewport) else {
+      return;
+    };
 
     let quad = Quad {
-      bounds: layout.bounds(),
+      bounds: visible_bounds,
       border: iced::Border {
         color: iced::Color::TRANSPARENT,
         width: 0.0,
@@ -165,22 +212,24 @@ where
       ..Quad::default()
     };
 
-    renderer.fill_quad(quad, iced::Color::BLACK);
+    renderer.fill_quad(quad, self.inputs.style.background_color);
 
-    let bounds = layout.bounds();
-    let content_bounds = state.viewport.absolute_content_bounds(bounds);
-    if let (Some(entry), Some(clip_bounds)) =
-      (&state.layout_entry, content_bounds.intersection(viewport))
-    {
+    self.draw_gutter(state, renderer, bounds, viewport);
+
+    let text_content_bounds = state.viewport.absolute_text_content_bounds(bounds);
+    if let (Some(entry), Some(clip_bounds)) = (
+      state.layout.entry(),
+      text_content_bounds.intersection(viewport),
+    ) {
       let position = iced::Point::new(
-        content_bounds.x - state.viewport.scroll_offset.x,
-        content_bounds.y,
+        text_content_bounds.x - state.viewport.scroll_offset.x,
+        text_content_bounds.y,
       );
 
       renderer.fill_raw(text::Raw {
         buffer: Arc::downgrade(entry.payload.buffer()),
         position,
-        color: iced::Color::WHITE,
+        color: self.inputs.style.text_color,
         clip_bounds,
       });
     }
@@ -192,6 +241,7 @@ impl<'a, Message> CodeView<'a, Message> {
     match delta {
       ScrollDelta::Pixels { x, y } => iced::Vector::new(*x, *y),
       ScrollDelta::Lines { x, y } => {
+        // TODO: move magic number to const after reshaping file structure
         let step = self.inputs.layout_config.line_height * 3.0;
         iced::Vector::new(*x * step, *y * step)
       }
@@ -206,7 +256,7 @@ impl<'a, Message> CodeView<'a, Message> {
     cursor: iced::advanced::mouse::Cursor,
     shell: &mut iced::advanced::Shell<'_, Message>,
   ) {
-    // Handle wheel over the whole CodeView area, including padding.
+    // Handle wheel over the whole CodeView area.
     // If text-only behavior is needed later, narrow this to the content bounds
     if !cursor.is_over(layout.bounds()) {
       return;

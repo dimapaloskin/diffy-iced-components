@@ -2,9 +2,49 @@ use iced::advanced::graphics::text::{self, cosmic_text};
 
 use crate::font_lock;
 use crate::layout::{LayoutKey, LayoutRequest};
-use crate::layout_cache::{CosmicLayoutPayload, LayoutCacheEntry};
+use crate::layout_cache::{CosmicBufferPayload, LayoutCacheEntry};
 use crate::projection::LayoutProjection;
 use crate::source_line::SourceLineHeights;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BufferUpdateKind {
+  FirstBuild,
+  TextChanged,
+  FontRuntimeChanged,
+  FontChanged,
+  LayoutOnly,
+}
+
+impl BufferUpdateKind {
+  fn classify(prev_key: Option<LayoutKey>, new_key: LayoutKey) -> Self {
+    let Some(prev_key) = prev_key else {
+      return Self::FirstBuild;
+    };
+
+    if prev_key.document_revision != new_key.document_revision {
+      return Self::TextChanged;
+    }
+
+    if prev_key.font_system_version != new_key.font_system_version {
+      return Self::FontRuntimeChanged;
+    }
+
+    if prev_key.font != new_key.font {
+      return Self::FontChanged;
+    }
+
+    Self::LayoutOnly
+  }
+
+  fn requires_set_text(self) -> bool {
+    matches!(
+      self,
+      // Font changes could only update attrs.
+      // For now reset text too because it is rare and avoids stale font caches.
+      Self::FirstBuild | Self::TextChanged | Self::FontRuntimeChanged | Self::FontChanged
+    )
+  }
+}
 
 pub(crate) fn rebuild_layout(
   request: LayoutRequest,
@@ -15,13 +55,17 @@ pub(crate) fn rebuild_layout(
   let raw_fs = font_system.raw();
 
   let prev_key = prev.as_ref().map(|entry| entry.key);
+  let update_kind = BufferUpdateKind::classify(prev_key, key);
+
   let metrics = metrics_from_request(&request);
   let mut payload = take_or_create_payload(prev, raw_fs, metrics);
 
   let buffer = payload.buffer_mut();
 
   sync_buffer_config(buffer, &request, metrics);
-  sync_buffer_text(buffer, &request, prev_key);
+  if update_kind.requires_set_text() {
+    sync_buffer_text(buffer, &request);
+  }
 
   let projection = sync_buffer_scroll_and_projection(buffer, raw_fs, &request);
 
@@ -55,11 +99,11 @@ fn take_or_create_payload(
   prev: Option<LayoutCacheEntry>,
   font_system: &mut cosmic_text::FontSystem,
   metrics: cosmic_text::Metrics,
-) -> CosmicLayoutPayload {
+) -> CosmicBufferPayload {
   prev.map(|entry| entry.payload).unwrap_or_else(|| {
     let buffer = cosmic_text::Buffer::new(font_system, metrics);
 
-    CosmicLayoutPayload::new(buffer)
+    CosmicBufferPayload::new(buffer)
   })
 }
 
@@ -77,41 +121,15 @@ fn sync_buffer_config(
   buffer.set_tab_width(request.config.tab_display_policy.spaces_per_tab().into());
 }
 
-// Buffer picks up metrics/size/wrap/tab via setters in sync_buffer_config.
-// Only update text and font here — nothing else affects attrs.
-fn sync_buffer_text(
-  buffer: &mut cosmic_text::Buffer,
-  request: &LayoutRequest<'_>,
-  prev_key: Option<LayoutKey>,
-) {
+fn sync_buffer_text(buffer: &mut cosmic_text::Buffer, request: &LayoutRequest<'_>) {
   let attrs = text::to_attributes(request.config.font);
 
-  if needs_set_text(prev_key, request) {
-    buffer.set_text(
-      request.document.text(),
-      &attrs,
-      cosmic_text::Shaping::Advanced,
-      None,
-    );
-  } else if needs_update_attrs(prev_key, request) {
-    update_plain_attrs(buffer, &attrs);
-  }
-}
-
-fn needs_set_text(prev_key: Option<LayoutKey>, request: &LayoutRequest<'_>) -> bool {
-  prev_key.is_none_or(|key| key.text_revision != request.document.id())
-}
-
-fn needs_update_attrs(prev_key: Option<LayoutKey>, request: &LayoutRequest<'_>) -> bool {
-  prev_key.is_some_and(|key| {
-    key.text_revision == request.document.id() && key.font != request.config.font
-  })
-}
-
-fn update_plain_attrs(buffer: &mut cosmic_text::Buffer, attrs: &cosmic_text::Attrs<'_>) {
-  for line in &mut buffer.lines {
-    line.set_attrs_list(cosmic_text::AttrsList::new(attrs));
-  }
+  buffer.set_text(
+    request.document.text(),
+    &attrs,
+    cosmic_text::Shaping::Advanced,
+    None,
+  );
 }
 
 fn sync_buffer_scroll_and_projection(

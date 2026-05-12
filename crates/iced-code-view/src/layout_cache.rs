@@ -8,17 +8,17 @@ use crate::projection::LayoutProjection;
 pub(crate) struct LayoutCacheEntry {
   pub(crate) key: LayoutKey,
   pub(crate) projection: LayoutProjection,
-  pub(crate) payload: CosmicLayoutPayload,
+  pub(crate) payload: CosmicBufferPayload,
   // The real scroll offset lives in Viewport.
   // This is just the Y offset already applied to this buffer/projection.
   pub(crate) prepared_document_scroll_y: f32,
 }
 
-pub(crate) struct CosmicLayoutPayload {
+pub(crate) struct CosmicBufferPayload {
   buffer: Arc<cosmic_text::Buffer>,
 }
 
-impl CosmicLayoutPayload {
+impl CosmicBufferPayload {
   pub(crate) fn new(buffer: cosmic_text::Buffer) -> Self {
     Self {
       buffer: Arc::new(buffer),

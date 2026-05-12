@@ -1,20 +1,27 @@
+mod background;
 mod code_view;
 mod controller;
 mod document;
 mod font_lock;
+mod gutter;
 mod layout;
 mod layout_cache;
 mod layout_engine;
 mod line_index;
 mod measurement;
+mod padding;
 mod policies;
 mod projection;
 mod scroll;
 mod source_line;
 mod state;
+mod style;
 mod viewport;
 
 pub use controller::{CodeViewController, CodeViewMessage};
 pub use document::Document;
+pub use gutter::GutterConfig;
 pub use layout::WrapMode;
+pub use padding::{CodeViewPadding, GutterPadding};
 pub use policies::{LineEndingPolicy, TabDisplayPolicy};
+pub use style::{CodeViewStyle, GutterStyle};
