@@ -43,10 +43,6 @@ impl GutterPadding {
     }
   }
 
-  pub fn symmetric(value: f32) -> Self {
-    Self::new(value)
-  }
-
   pub(crate) fn to_bits(self) -> u64 {
     self.horizontal.to_bits()
   }
@@ -58,21 +54,15 @@ impl From<HorizontalPadding> for GutterPadding {
   }
 }
 
-impl From<(f32, f32)> for GutterPadding {
-  fn from(horizontal: (f32, f32)) -> Self {
-    Self::new(horizontal)
-  }
-}
-
 impl From<f32> for GutterPadding {
   fn from(value: f32) -> Self {
-    Self::symmetric(value)
+    Self::new(value)
   }
 }
 
 impl Default for GutterPadding {
   fn default() -> Self {
-    Self::symmetric(8.0)
+    Self::new(8.0)
   }
 }
 
@@ -98,12 +88,6 @@ impl HorizontalPadding {
 
   pub(crate) fn to_bits(self) -> u64 {
     ((self.left.to_bits() as u64) << 32) | self.right.to_bits() as u64
-  }
-}
-
-impl From<(f32, f32)> for HorizontalPadding {
-  fn from((left, right): (f32, f32)) -> Self {
-    Self::new(left, right)
   }
 }
 
@@ -137,12 +121,6 @@ impl VerticalPadding {
       top: value,
       bottom: value,
     }
-  }
-}
-
-impl From<(f32, f32)> for VerticalPadding {
-  fn from((top, bottom): (f32, f32)) -> Self {
-    Self::new(top, bottom)
   }
 }
 

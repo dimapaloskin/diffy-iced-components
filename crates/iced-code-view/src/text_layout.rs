@@ -1,3 +1,10 @@
+pub(crate) mod cache;
+pub(crate) mod engine;
+pub(crate) mod projection;
+
+pub(crate) use cache::VisibleTextLayout;
+pub(crate) use projection::VisibleTextProjection;
+
 use iced::advanced::graphics::text::{self, cosmic_text};
 
 use crate::{TabDisplayPolicy, document::Document};
@@ -19,7 +26,7 @@ impl WrapMode {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub(crate) struct LayoutConfig {
+pub(crate) struct TextLayoutConfig {
   pub(crate) font: iced::Font,
   pub(crate) font_size: f32,
   pub(crate) line_height: f32,
@@ -27,7 +34,7 @@ pub(crate) struct LayoutConfig {
   pub(crate) tab_display_policy: TabDisplayPolicy,
 }
 
-impl Default for LayoutConfig {
+impl Default for TextLayoutConfig {
   fn default() -> Self {
     Self {
       font: iced::Font::MONOSPACE,
@@ -40,10 +47,9 @@ impl Default for LayoutConfig {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct LayoutKey {
+pub(crate) struct TextLayoutKey {
   pub(crate) document_revision: u64,
   pub(crate) content_width_bits: u32,
-  pub(crate) content_height_bits: u32,
   pub(crate) font_size_bits: u32,
   pub(crate) line_height_bits: u32,
   pub(crate) font: iced::Font,
@@ -52,12 +58,14 @@ pub(crate) struct LayoutKey {
   pub(crate) tab_policy: TabDisplayPolicy,
 }
 
-impl LayoutKey {
-  pub(crate) fn from_request(request: &LayoutRequest, font_system_version: text::Version) -> Self {
+impl TextLayoutKey {
+  pub(crate) fn from_request(
+    request: &TextLayoutRequest,
+    font_system_version: text::Version,
+  ) -> Self {
     Self {
       document_revision: request.document.revision(),
       content_width_bits: request.content_size.width.to_bits(),
-      content_height_bits: request.content_size.height.to_bits(),
       font: request.config.font,
       font_system_version,
       font_size_bits: request.config.font_size.to_bits(),
@@ -68,9 +76,9 @@ impl LayoutKey {
   }
 }
 
-pub(crate) struct LayoutRequest<'a> {
+pub(crate) struct TextLayoutRequest<'a> {
   pub(crate) document: &'a Document,
   pub(crate) content_size: iced::Size,
   pub(crate) scroll_offset: iced::Vector,
-  pub(crate) config: LayoutConfig,
+  pub(crate) config: TextLayoutConfig,
 }

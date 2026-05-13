@@ -1,19 +1,19 @@
 use crate::font_lock;
 use crate::gutter::engine as gutter_engine;
 use crate::gutter::{
-  GutterCacheEntry, GutterMeasureRequest, GutterMetrics, GutterRenderKey, GutterRenderRequest,
-  GutterRowsSignature,
+  GutterMetrics, GutterMetricsRequest, GutterRenderArtifactKey, GutterRenderArtifactRequest,
+  GutterRowsSignature, MeasuredGutter,
 };
-use crate::layout::{LayoutKey, LayoutRequest};
-use crate::layout_cache::LayoutCacheEntry;
-use crate::layout_engine;
 use crate::measurement::{MeasurementKey, MeasurementRequest, MeasurementResult};
 use crate::scroll::ScrollExtent;
+use crate::text_layout::VisibleTextLayout;
+use crate::text_layout::engine as text_layout_engine;
+use crate::text_layout::{TextLayoutKey, TextLayoutRequest};
 use crate::viewport::Viewport;
 
 #[derive(Default)]
 pub(crate) struct CodeViewState {
-  pub(crate) layout: LayoutState,
+  pub(crate) text_layout: TextLayoutState,
   pub(crate) gutter: GutterState,
   pub(crate) viewport: Viewport,
   pub(crate) scroll_extent: ScrollExtent,
@@ -22,75 +22,90 @@ pub(crate) struct CodeViewState {
 }
 
 #[derive(Default)]
-pub(crate) struct LayoutState {
-  entry: Option<LayoutCacheEntry>,
+pub(crate) struct TextLayoutState {
+  visible_layout: Option<VisibleTextLayout>,
 }
 
-impl LayoutState {
-  pub(crate) fn refresh(&mut self, request: LayoutRequest<'_>) {
-    let key = LayoutKey::from_request(&request, font_lock::font_system_version());
-    let prev = self.entry.take();
+impl TextLayoutState {
+  pub(crate) fn ensure_visible_layout(
+    &mut self,
+    request: TextLayoutRequest<'_>,
+  ) -> &VisibleTextLayout {
+    let key = TextLayoutKey::from_request(&request, font_lock::font_system_version());
+    let prev = self.visible_layout.take();
 
-    self.entry = match prev {
+    self.visible_layout = match prev {
       Some(mut prev) if prev.key == key => {
-        layout_engine::scroll_to(&mut prev, &request);
+        text_layout_engine::sync_visible_viewport(&mut prev, &request);
         Some(prev)
       }
-      prev => Some(layout_engine::rebuild_layout(request, key, prev)),
-    }
+      prev => Some(text_layout_engine::rebuild_visible_layout(
+        request, key, prev,
+      )),
+    };
+
+    self
+      .visible_layout
+      .as_ref()
+      .expect("visible text layout is ensured by TextLayoutState::ensure_visible_layout")
   }
 
-  pub(crate) fn entry(&self) -> Option<&LayoutCacheEntry> {
-    self.entry.as_ref()
+  pub(crate) fn visible_layout(&self) -> Option<&VisibleTextLayout> {
+    self.visible_layout.as_ref()
   }
 }
 
 #[derive(Default)]
 pub(crate) struct GutterState {
-  entry: Option<GutterCacheEntry>,
+  measured: Option<MeasuredGutter>,
 }
 
 impl GutterState {
-  pub(crate) fn measure(&mut self, request: GutterMeasureRequest<'_>) -> GutterMetrics {
-    let prev = self.entry.take();
-    let (metrics, entry) = gutter_engine::measure_gutter(request, prev);
+  pub(crate) fn ensure_metrics(&mut self, request: GutterMetricsRequest<'_>) -> GutterMetrics {
+    let prev = self.measured.take();
+    let (metrics, measured) = gutter_engine::ensure_measured_gutter(request, prev);
 
-    self.entry = entry;
+    self.measured = measured;
 
     metrics
   }
 
-  pub(crate) fn refresh(&mut self, render_request: GutterRenderRequest<'_>) {
-    let Some(entry) = self.entry.as_mut() else {
+  pub(crate) fn ensure_render_artifact(&mut self, render_request: GutterRenderArtifactRequest<'_>) {
+    let Some(measured) = self.measured.as_mut() else {
       return;
     };
 
-    let Some(key) = GutterRenderKey::for_render_request(&render_request, entry.width_key) else {
-      entry.render_artifact = None;
+    let Some(key) = GutterRenderArtifactKey::for_request(&render_request, measured.metrics_key)
+    else {
+      measured.render_artifact = None;
       return;
     };
 
     let projection = render_request.projection;
 
-    entry.render_artifact = match entry.render_artifact.take() {
+    measured.render_artifact = match measured.render_artifact.take() {
       Some(mut render) if render.key == key => {
-        gutter_engine::sync_render_origin(&mut render, projection);
+        gutter_engine::sync_render_artifact_origin(&mut render, projection);
         Some(render)
       }
-      prev => Some(gutter_engine::rebuild_render(render_request, key, prev)),
+      prev => Some(gutter_engine::rebuild_render_artifact(
+        render_request,
+        key,
+        prev,
+      )),
     };
 
     debug_assert_eq!(
       GutterRowsSignature::from_projection(projection).as_ref(),
-      entry
+      measured
         .render_artifact
         .as_ref()
         .map(|artifact| &artifact.key.rows_signature),
     );
   }
 
-  pub(crate) fn entry(&self) -> Option<&GutterCacheEntry> {
-    self.entry.as_ref()
+  pub(crate) fn measured(&self) -> Option<&MeasuredGutter> {
+    self.measured.as_ref()
   }
 }
 

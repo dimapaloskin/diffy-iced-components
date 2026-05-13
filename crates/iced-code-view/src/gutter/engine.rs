@@ -3,50 +3,51 @@ use std::fmt::Write as _;
 use iced::advanced::graphics::text::{self, cosmic_text};
 
 use super::{
-  GutterCacheEntry, GutterMeasureRequest, GutterMetrics, GutterRenderArtifact, GutterRenderKey,
-  GutterRenderRequest, GutterWidthKey,
+  GutterMetrics, GutterMetricsKey, GutterMetricsRequest, GutterRenderArtifact,
+  GutterRenderArtifactKey, GutterRenderArtifactRequest, MeasuredGutter,
 };
+use crate::cosmic_buffer::CosmicBufferPayload;
 use crate::font_lock;
-use crate::layout_cache::CosmicBufferPayload;
-use crate::projection::LayoutProjection;
+use crate::text_layout::VisibleTextProjection;
 
-pub(crate) fn measure_gutter(
-  request: GutterMeasureRequest<'_>,
-  prev: Option<GutterCacheEntry>,
-) -> (GutterMetrics, Option<GutterCacheEntry>) {
-  if !request.gutter_config.enabled {
+pub(crate) fn ensure_measured_gutter(
+  request: GutterMetricsRequest<'_>,
+  prev: Option<MeasuredGutter>,
+) -> (GutterMetrics, Option<MeasuredGutter>) {
+  if !request.gutter_config.has_visible_content() {
     return (GutterMetrics::disabled(), None);
   }
 
-  let width_key = GutterWidthKey::from_measure_request(&request, font_lock::font_system_version());
+  let metrics_key =
+    GutterMetricsKey::from_metrics_request(&request, font_lock::font_system_version());
 
   if let Some(prev) = prev
-    && prev.width_key == width_key
+    && prev.metrics_key == metrics_key
   {
     return (prev.metrics, Some(prev));
   }
 
   let metrics = measure_line_number_metrics(&request);
 
-  let entry = GutterCacheEntry {
-    width_key,
+  let measured = MeasuredGutter {
+    metrics_key,
     metrics,
     render_artifact: None,
   };
 
-  (metrics, Some(entry))
+  (metrics, Some(measured))
 }
 
-fn measure_line_number_metrics(request: &GutterMeasureRequest<'_>) -> GutterMetrics {
+fn measure_line_number_metrics(request: &GutterMetricsRequest<'_>) -> GutterMetrics {
   let mut font_system = font_lock::foreground_font_system_write();
   let raw_fs = font_system.raw();
 
   let metrics = cosmic_text::Metrics::new(
-    request.layout_config.font_size,
-    request.layout_config.line_height,
+    request.text_layout_config.font_size,
+    request.text_layout_config.line_height,
   );
 
-  let attrs = text::to_attributes(request.layout_config.font);
+  let attrs = text::to_attributes(request.text_layout_config.font);
   let mut buffer = cosmic_text::Buffer::new_empty(metrics);
 
   buffer.set_wrap(cosmic_text::Wrap::None);
@@ -75,17 +76,17 @@ fn measure_sample_width(
     .fold(0.0_f32, |max_width, line| max_width.max(line.w))
 }
 
-pub(crate) fn rebuild_render(
-  request: GutterRenderRequest<'_>,
-  key: GutterRenderKey,
+pub(crate) fn rebuild_render_artifact(
+  request: GutterRenderArtifactRequest<'_>,
+  key: GutterRenderArtifactKey,
   prev: Option<GutterRenderArtifact>,
 ) -> GutterRenderArtifact {
   let mut font_system = font_lock::foreground_font_system_write();
   let raw_fs = font_system.raw();
 
   let metrics = cosmic_text::Metrics::new(
-    request.layout_config.font_size,
-    request.layout_config.line_height,
+    request.text_layout_config.font_size,
+    request.text_layout_config.line_height,
   );
 
   let mut payload = prev.map(|artifact| artifact.payload).unwrap_or_else(|| {
@@ -98,8 +99,8 @@ pub(crate) fn rebuild_render(
     .metrics
     .render_label_width(request.gutter_size.width);
   let buffer_height =
-    request.projection.visible_rows.len() as f32 * request.layout_config.line_height;
-  let attrs = text::to_attributes(request.layout_config.font);
+    request.projection.visible_rows.len() as f32 * request.text_layout_config.line_height;
+  let attrs = text::to_attributes(request.text_layout_config.font);
   let labels = build_visible_line_number_text(request.projection);
 
   buffer.set_wrap(cosmic_text::Wrap::None);
@@ -124,14 +125,14 @@ pub(crate) fn rebuild_render(
   }
 }
 
-pub(crate) fn sync_render_origin(
+pub(crate) fn sync_render_artifact_origin(
   artifact: &mut GutterRenderArtifact,
-  projection: &LayoutProjection,
+  projection: &VisibleTextProjection,
 ) {
   artifact.first_row_viewport_y = first_row_viewport_y(projection);
 }
 
-fn first_row_viewport_y(projection: &LayoutProjection) -> f32 {
+fn first_row_viewport_y(projection: &VisibleTextProjection) -> f32 {
   projection
     .visible_rows
     .first()
@@ -139,7 +140,7 @@ fn first_row_viewport_y(projection: &LayoutProjection) -> f32 {
     .unwrap_or(0.0)
 }
 
-fn build_visible_line_number_text(projection: &LayoutProjection) -> String {
+fn build_visible_line_number_text(projection: &VisibleTextProjection) -> String {
   let mut text = String::new();
 
   for (index, row) in projection.visible_rows.iter().enumerate() {

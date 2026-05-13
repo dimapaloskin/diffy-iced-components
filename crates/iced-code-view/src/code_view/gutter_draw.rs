@@ -17,11 +17,11 @@ impl<'a, Message> CodeView<'a, Message> {
   ) where
     Renderer: RendererTrait + TextRendererTrait,
   {
-    let Some(gutter) = state.viewport.absolute_gutter(widget_bounds) else {
+    let Some(gutter_area) = state.viewport.absolute_gutter(widget_bounds) else {
       return;
     };
 
-    let Some(background_clip_bounds) = gutter.bounds.intersection(viewport) else {
+    let Some(background_clip_bounds) = gutter_area.bounds.intersection(viewport) else {
       return;
     };
 
@@ -38,34 +38,36 @@ impl<'a, Message> CodeView<'a, Message> {
       self.inputs.style.gutter.background_color,
     );
 
-    self.draw_gutter_separator(state, renderer, gutter.bounds, viewport);
-    self.draw_gutter_labels(state, renderer, gutter, viewport);
+    self.draw_gutter_separator(state, renderer, gutter_area, viewport);
+    self.draw_gutter_labels(state, renderer, gutter_area, viewport);
   }
 
   fn draw_gutter_separator<Renderer>(
     &self,
     state: &CodeViewState,
     renderer: &mut Renderer,
-    gutter_bounds: iced::Rectangle,
+    gutter_area: ViewportArea,
     viewport: &iced::Rectangle,
   ) where
     Renderer: RendererTrait,
   {
-    let Some(entry) = state.gutter.entry() else {
+    let Some(measured_gutter) = state.gutter.measured() else {
       return;
     };
 
-    let separator_width = entry.metrics.visible_separator_width(gutter_bounds.width);
+    let separator_width = measured_gutter
+      .metrics
+      .visible_separator_width(gutter_area.bounds.width);
 
     if separator_width <= 0.0 {
       return;
     }
 
     let separator_bounds = iced::Rectangle {
-      x: gutter_bounds.x + gutter_bounds.width - separator_width,
-      y: gutter_bounds.y,
+      x: gutter_area.bounds.x + gutter_area.bounds.width - separator_width,
+      y: gutter_area.bounds.y,
       width: separator_width,
-      height: gutter_bounds.height,
+      height: gutter_area.bounds.height,
     };
 
     let Some(separator_bounds) = separator_bounds.intersection(viewport) else {
@@ -86,32 +88,32 @@ impl<'a, Message> CodeView<'a, Message> {
     &self,
     state: &CodeViewState,
     renderer: &mut Renderer,
-    gutter: ViewportArea,
+    gutter_area: ViewportArea,
     viewport: &iced::Rectangle,
   ) where
     Renderer: TextRendererTrait,
   {
-    let Some(entry) = state.gutter.entry() else {
+    let Some(measured_gutter) = state.gutter.measured() else {
       return;
     };
 
-    let Some(render_artifact) = entry.render_artifact.as_ref() else {
+    let Some(render_artifact) = measured_gutter.render_artifact.as_ref() else {
       return;
     };
 
-    let Some(clip_bounds) = gutter.content_bounds.intersection(viewport) else {
+    let Some(clip_bounds) = gutter_area.content_bounds.intersection(viewport) else {
       return;
     };
 
-    let render_label_width = entry
+    let render_label_width = measured_gutter
       .metrics
-      .render_label_width(gutter.content_bounds.width);
+      .render_label_width(gutter_area.content_bounds.width);
     if render_label_width <= 0.0 {
       return;
     }
 
-    let x = gutter.content_bounds.x + entry.metrics.padding.horizontal.left;
-    let y = gutter.content_bounds.y + render_artifact.first_row_viewport_y;
+    let x = gutter_area.content_bounds.x + measured_gutter.metrics.padding.horizontal.left;
+    let y = gutter_area.content_bounds.y + render_artifact.first_row_viewport_y;
 
     renderer.fill_raw(text::Raw {
       buffer: Arc::downgrade(render_artifact.payload.buffer()),

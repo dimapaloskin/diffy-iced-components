@@ -120,6 +120,7 @@ fn offset_bounds(bounds: iced::Rectangle, widget_bounds: iced::Rectangle) -> ice
 #[cfg(test)]
 mod tests {
   use super::*;
+  use crate::padding::{HorizontalPadding, VerticalPadding};
 
   fn gutter_metrics() -> GutterMetrics {
     GutterMetrics {
@@ -134,7 +135,10 @@ mod tests {
   fn viewport_splits_surface_gutter_text_and_content_bounds() {
     let viewport = Viewport::new(
       iced::Size::new(200.0, 100.0),
-      CodeViewPadding::new((5.0, 11.0), (13.0, 7.0)),
+      CodeViewPadding::new(
+        VerticalPadding::new(5.0, 11.0),
+        HorizontalPadding::new(13.0, 7.0),
+      ),
       gutter_metrics(),
       iced::Vector::new(3.0, 4.0),
     );
@@ -186,7 +190,10 @@ mod tests {
   fn viewport_clamps_gutter_to_surface_width() {
     let viewport = Viewport::new(
       iced::Size::new(10.0, 40.0),
-      CodeViewPadding::new((2.0, 3.0), (5.0, 4.0)),
+      CodeViewPadding::new(
+        VerticalPadding::new(2.0, 3.0),
+        HorizontalPadding::new(5.0, 4.0),
+      ),
       GutterMetrics {
         requested_width: 100.0,
         ..gutter_metrics()

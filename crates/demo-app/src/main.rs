@@ -38,7 +38,7 @@ impl App {
   fn new() -> (Self, Task<AppMessage>) {
     let gutter_config = GutterConfig {
       separator_width: 2.0,
-      padding: GutterPadding::symmetric(8.0),
+      padding: GutterPadding::new(8.0),
       ..Default::default()
     };
 
@@ -80,7 +80,7 @@ impl App {
       }
       AppMessage::ToggleLineNumbers => {
         let mut gutter_config = self.code_view.gutter_config();
-        gutter_config.enabled = !gutter_config.enabled;
+        gutter_config.content.line_numbers = !gutter_config.content.line_numbers;
         self.code_view.set_gutter_config(gutter_config);
         Task::none()
       }
@@ -95,7 +95,7 @@ impl App {
         row.push(button(*name).on_press(AppMessage::SelectFile(index)))
       });
 
-    let gutter_label = if self.code_view.gutter_config().enabled {
+    let gutter_label = if self.code_view.gutter_config().content.line_numbers {
       "line numbers:  on"
     } else {
       "line numbers: off"

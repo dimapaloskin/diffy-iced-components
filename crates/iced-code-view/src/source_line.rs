@@ -1,14 +1,14 @@
 mod uniform;
 
 use crate::WrapMode;
-use crate::layout::LayoutRequest;
+use crate::text_layout::TextLayoutRequest;
 
 pub(crate) enum SourceLineHeights {
   Uniform(uniform::Heights),
 }
 
 impl SourceLineHeights {
-  pub(crate) fn for_request(request: &LayoutRequest<'_>) -> Self {
+  pub(crate) fn for_request(request: &TextLayoutRequest<'_>) -> Self {
     match request.config.wrap_mode {
       WrapMode::NoWrap => Self::Uniform(uniform::Heights::new(
         request.document.line_count(),

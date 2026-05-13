@@ -7,17 +7,17 @@ use crate::background;
 use crate::code_view::{CodeView, CodeViewInputs};
 use crate::document::Document;
 use crate::gutter::GutterConfig;
-use crate::layout::{LayoutConfig, WrapMode};
 use crate::measurement::{MeasurementKey, MeasurementRequest, MeasurementResult, measure_document};
 use crate::padding::CodeViewPadding;
 use crate::policies::TabDisplayPolicy;
 use crate::style::CodeViewStyle;
+use crate::text_layout::{TextLayoutConfig, WrapMode};
 
 pub struct CodeViewController {
   document: Document,
   width: Length,
   height: Length,
-  layout_config: LayoutConfig,
+  text_layout_config: TextLayoutConfig,
   padding: CodeViewPadding,
   border_radius: iced::border::Radius,
   session_id: u64,
@@ -48,9 +48,9 @@ pub struct CodeViewMessage {
 }
 
 impl CodeViewMessage {
-  fn measure_requested(request: MeasurementRequest) -> Self {
+  fn measurement_requested(request: MeasurementRequest) -> Self {
     Self {
-      event: CodeViewEvent::MeasureRequested { request },
+      event: CodeViewEvent::MeasurementRequested { request },
     }
   }
 
@@ -63,7 +63,7 @@ impl CodeViewMessage {
 
 #[derive(Debug, Clone)]
 enum CodeViewEvent {
-  MeasureRequested {
+  MeasurementRequested {
     request: MeasurementRequest,
   },
   MeasurementFinished {
@@ -78,7 +78,7 @@ impl CodeViewController {
       document,
       width: Length::Fill,
       height: Length::Fill,
-      layout_config: LayoutConfig::default(),
+      text_layout_config: TextLayoutConfig::default(),
       padding: CodeViewPadding::default(),
       border_radius: iced::border::Radius::default(),
       session_id: next_session_id(),
@@ -145,73 +145,73 @@ impl CodeViewController {
   }
 
   pub fn with_font(mut self, font: iced::Font) -> Self {
-    self.layout_config.font = font;
+    self.text_layout_config.font = font;
     self
   }
 
   pub fn set_font(&mut self, font: iced::Font) {
-    self.layout_config.font = font;
+    self.text_layout_config.font = font;
     self.invalidate_measurement();
   }
 
   pub fn font(&self) -> iced::Font {
-    self.layout_config.font
+    self.text_layout_config.font
   }
 
   pub fn with_font_size(mut self, font_size: f32) -> Self {
-    self.layout_config.font_size = font_size;
+    self.text_layout_config.font_size = font_size;
     self
   }
 
   pub fn set_font_size(&mut self, font_size: f32) {
-    self.layout_config.font_size = font_size;
+    self.text_layout_config.font_size = font_size;
     self.invalidate_measurement();
   }
 
   pub fn font_size(&self) -> f32 {
-    self.layout_config.font_size
+    self.text_layout_config.font_size
   }
 
   pub fn with_line_height(mut self, line_height: f32) -> Self {
-    self.layout_config.line_height = line_height;
+    self.text_layout_config.line_height = line_height;
     self
   }
 
   pub fn set_line_height(&mut self, line_height: f32) {
-    self.layout_config.line_height = line_height;
+    self.text_layout_config.line_height = line_height;
     self.invalidate_measurement();
   }
 
   pub fn line_height(&self) -> f32 {
-    self.layout_config.line_height
+    self.text_layout_config.line_height
   }
 
   pub fn with_wrap_mode(mut self, wrap_mode: WrapMode) -> Self {
-    self.layout_config.wrap_mode = wrap_mode;
+    self.text_layout_config.wrap_mode = wrap_mode;
     self
   }
 
   pub fn set_wrap_mode(&mut self, wrap_mode: WrapMode) {
-    self.layout_config.wrap_mode = wrap_mode;
+    self.text_layout_config.wrap_mode = wrap_mode;
     self.invalidate_measurement();
   }
 
   pub fn wrap_mode(&self) -> WrapMode {
-    self.layout_config.wrap_mode
+    self.text_layout_config.wrap_mode
   }
 
   pub fn with_tab_display_policy(mut self, tab_display_policy: TabDisplayPolicy) -> Self {
-    self.layout_config.tab_display_policy = tab_display_policy;
+    self.text_layout_config.tab_display_policy = tab_display_policy;
     self
   }
 
   pub fn set_tab_display_policy(&mut self, tab_display_policy: TabDisplayPolicy) {
-    self.layout_config.tab_display_policy = tab_display_policy;
+    self.text_layout_config.tab_display_policy = tab_display_policy;
     self.invalidate_measurement();
   }
 
   pub fn tab_display_policy(&self) -> TabDisplayPolicy {
-    self.layout_config.tab_display_policy
+    self.text_layout_config.tab_display_policy
   }
 
   pub fn with_gutter_config(mut self, gutter_config: GutterConfig) -> Self {
@@ -265,7 +265,7 @@ impl CodeViewController {
     self.measurement_result = None;
   }
 
-  fn on_measure_requested(&mut self, request: MeasurementRequest) -> Task<CodeViewMessage> {
+  fn on_measurement_requested(&mut self, request: MeasurementRequest) -> Task<CodeViewMessage> {
     if request.key.document_revision != self.document.revision() {
       return Task::none();
     }
@@ -330,7 +330,7 @@ impl CodeViewController {
 
   pub fn update(&mut self, message: CodeViewMessage) -> Task<CodeViewMessage> {
     match message.event {
-      CodeViewEvent::MeasureRequested { request } => self.on_measure_requested(request),
+      CodeViewEvent::MeasurementRequested { request } => self.on_measurement_requested(request),
       CodeViewEvent::MeasurementFinished { session_id, result } => {
         self.on_measurement_finished(session_id, result)
       }
@@ -342,7 +342,7 @@ impl CodeViewController {
       document: &self.document,
       width: self.width,
       height: self.height,
-      layout_config: self.layout_config,
+      text_layout_config: self.text_layout_config,
       padding: self.padding,
       border_radius: self.border_radius,
       gutter_config: self.gutter_config,
@@ -356,7 +356,7 @@ impl CodeViewController {
     Theme: 'a,
     Renderer: 'a + iced::advanced::renderer::Renderer + iced::advanced::graphics::text::Renderer,
   {
-    CodeView::new(self.widget_inputs(), CodeViewMessage::measure_requested).into()
+    CodeView::new(self.widget_inputs(), CodeViewMessage::measurement_requested).into()
   }
 }
 

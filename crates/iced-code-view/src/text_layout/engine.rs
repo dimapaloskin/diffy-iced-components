@@ -1,10 +1,11 @@
 use iced::advanced::graphics::text::{self, cosmic_text};
 
+use crate::cosmic_buffer::CosmicBufferPayload;
 use crate::font_lock;
-use crate::layout::{LayoutKey, LayoutRequest};
-use crate::layout_cache::{CosmicBufferPayload, LayoutCacheEntry};
-use crate::projection::LayoutProjection;
 use crate::source_line::SourceLineHeights;
+use crate::text_layout::VisibleTextLayout;
+use crate::text_layout::VisibleTextProjection;
+use crate::text_layout::{TextLayoutKey, TextLayoutRequest};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum BufferUpdateKind {
@@ -12,11 +13,11 @@ enum BufferUpdateKind {
   TextChanged,
   FontRuntimeChanged,
   FontChanged,
-  LayoutOnly,
+  GeometryOnly,
 }
 
 impl BufferUpdateKind {
-  fn classify(prev_key: Option<LayoutKey>, new_key: LayoutKey) -> Self {
+  fn classify(prev_key: Option<TextLayoutKey>, new_key: TextLayoutKey) -> Self {
     let Some(prev_key) = prev_key else {
       return Self::FirstBuild;
     };
@@ -33,7 +34,7 @@ impl BufferUpdateKind {
       return Self::FontChanged;
     }
 
-    Self::LayoutOnly
+    Self::GeometryOnly
   }
 
   fn requires_set_text(self) -> bool {
@@ -46,11 +47,11 @@ impl BufferUpdateKind {
   }
 }
 
-pub(crate) fn rebuild_layout(
-  request: LayoutRequest,
-  key: LayoutKey,
-  prev: Option<LayoutCacheEntry>,
-) -> LayoutCacheEntry {
+pub(crate) fn rebuild_visible_layout(
+  request: TextLayoutRequest,
+  key: TextLayoutKey,
+  prev: Option<VisibleTextLayout>,
+) -> VisibleTextLayout {
   let mut font_system = font_lock::foreground_font_system_write();
   let raw_fs = font_system.raw();
 
@@ -69,16 +70,25 @@ pub(crate) fn rebuild_layout(
 
   let projection = sync_buffer_scroll_and_projection(buffer, raw_fs, &request);
 
-  LayoutCacheEntry {
+  VisibleTextLayout {
     key,
     projection,
     payload,
-    prepared_document_scroll_y: request.scroll_offset.y,
+    prepared_content_height_bits: request.content_size.height.to_bits(),
+    prepared_document_scroll_y_bits: request.scroll_offset.y.to_bits(),
   }
 }
 
-pub(crate) fn scroll_to(entry: &mut LayoutCacheEntry, request: &LayoutRequest<'_>) {
-  if entry.prepared_document_scroll_y == request.scroll_offset.y {
+pub(crate) fn sync_visible_viewport(
+  entry: &mut VisibleTextLayout,
+  request: &TextLayoutRequest<'_>,
+) {
+  let content_height_bits = request.content_size.height.to_bits();
+  let document_scroll_y_bits = request.scroll_offset.y.to_bits();
+  let height_changed = entry.prepared_content_height_bits != content_height_bits;
+  let scroll_changed = entry.prepared_document_scroll_y_bits != document_scroll_y_bits;
+
+  if !height_changed && !scroll_changed {
     return;
   }
 
@@ -87,16 +97,21 @@ pub(crate) fn scroll_to(entry: &mut LayoutCacheEntry, request: &LayoutRequest<'_
   let raw_fs = font_system.raw();
   let buffer = entry.payload.buffer_mut();
 
+  if height_changed {
+    sync_buffer_config(buffer, request, metrics_from_request(request));
+  }
+
   entry.projection = sync_buffer_scroll_and_projection(buffer, raw_fs, request);
-  entry.prepared_document_scroll_y = request.scroll_offset.y;
+  entry.prepared_content_height_bits = content_height_bits;
+  entry.prepared_document_scroll_y_bits = document_scroll_y_bits;
 }
 
-fn metrics_from_request(request: &LayoutRequest<'_>) -> cosmic_text::Metrics {
+fn metrics_from_request(request: &TextLayoutRequest<'_>) -> cosmic_text::Metrics {
   cosmic_text::Metrics::new(request.config.font_size, request.config.line_height)
 }
 
 fn take_or_create_payload(
-  prev: Option<LayoutCacheEntry>,
+  prev: Option<VisibleTextLayout>,
   font_system: &mut cosmic_text::FontSystem,
   metrics: cosmic_text::Metrics,
 ) -> CosmicBufferPayload {
@@ -109,7 +124,7 @@ fn take_or_create_payload(
 
 fn sync_buffer_config(
   buffer: &mut cosmic_text::Buffer,
-  request: &LayoutRequest<'_>,
+  request: &TextLayoutRequest<'_>,
   metrics: cosmic_text::Metrics,
 ) {
   buffer.set_wrap(request.config.wrap_mode.to_cosmic());
@@ -121,7 +136,7 @@ fn sync_buffer_config(
   buffer.set_tab_width(request.config.tab_display_policy.spaces_per_tab().into());
 }
 
-fn sync_buffer_text(buffer: &mut cosmic_text::Buffer, request: &LayoutRequest<'_>) {
+fn sync_buffer_text(buffer: &mut cosmic_text::Buffer, request: &TextLayoutRequest<'_>) {
   let attrs = text::to_attributes(request.config.font);
 
   buffer.set_text(
@@ -135,13 +150,13 @@ fn sync_buffer_text(buffer: &mut cosmic_text::Buffer, request: &LayoutRequest<'_
 fn sync_buffer_scroll_and_projection(
   buffer: &mut cosmic_text::Buffer,
   font_system: &mut cosmic_text::FontSystem,
-  request: &LayoutRequest<'_>,
-) -> LayoutProjection {
+  request: &TextLayoutRequest<'_>,
+) -> VisibleTextProjection {
   let source_line_heights = SourceLineHeights::for_request(request);
   let source_offset = source_line_heights.resolve_document_y(request.scroll_offset.y);
 
   buffer.set_scroll(source_offset.to_cosmic_scroll());
   buffer.shape_until_scroll(font_system, false);
 
-  LayoutProjection::build(buffer, &source_line_heights, request.content_size)
+  VisibleTextProjection::build(buffer, &source_line_heights, request.content_size)
 }

@@ -137,11 +137,11 @@ mod tests {
 
   #[test]
   fn no_wrap_horizontal_extent_uses_measurement_result() {
-    use crate::layout::LayoutConfig;
+    use crate::text_layout::TextLayoutConfig;
 
     let document = Document::new("short\nlonger line");
     let request =
-      crate::measurement::MeasurementRequest::new(&document, LayoutConfig::default(), 300.0);
+      crate::measurement::MeasurementRequest::new(&document, TextLayoutConfig::default(), 300.0);
     let result = MeasurementResult::no_wrap_horizontal_extent(request.key, 1234.0);
 
     assert_eq!(

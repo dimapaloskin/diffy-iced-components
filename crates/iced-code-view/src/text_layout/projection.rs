@@ -4,7 +4,7 @@ use crate::source_line::SourceLineHeights;
 
 #[allow(dead_code)]
 #[derive(Debug)]
-pub(crate) struct RowSnapshot {
+pub(crate) struct VisibleTextRow {
   pub(crate) source_line_index: usize,
   pub(crate) wrap_row_index: usize,
 
@@ -17,12 +17,12 @@ pub(crate) struct RowSnapshot {
 }
 
 #[allow(dead_code)]
-pub(crate) struct LayoutProjection {
+pub(crate) struct VisibleTextProjection {
   pub(crate) visible_text_size: iced::Size,
-  pub(crate) visible_rows: Vec<RowSnapshot>,
+  pub(crate) visible_rows: Vec<VisibleTextRow>,
 }
 
-impl LayoutProjection {
+impl VisibleTextProjection {
   pub(crate) fn build(
     buffer: &cosmic_text::Buffer,
     source_line_heights: &SourceLineHeights,
@@ -62,7 +62,7 @@ impl LayoutProjection {
           text_width = text_width.max(layout_line.w);
           visible_height += height;
 
-          visible_rows.push(RowSnapshot {
+          visible_rows.push(VisibleTextRow {
             source_line_index,
             wrap_row_index,
             y_inside_source_line,

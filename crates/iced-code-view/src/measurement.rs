@@ -6,8 +6,8 @@ use iced::advanced::graphics::text;
 
 use crate::document::Document;
 use crate::font_lock;
-use crate::layout::{LayoutConfig, WrapMode};
 use crate::policies::TabDisplayPolicy;
+use crate::text_layout::{TextLayoutConfig, WrapMode};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum MeasurementMode {
@@ -34,19 +34,19 @@ impl MeasurementMode {
 pub(crate) struct MeasurementRequest {
   pub(crate) key: MeasurementKey,
   pub(crate) document: Document,
-  pub(crate) layout_config: LayoutConfig,
+  pub(crate) text_layout_config: TextLayoutConfig,
 }
 
 impl MeasurementRequest {
   pub(crate) fn new(
     document: &Document,
-    layout_config: LayoutConfig,
+    text_layout_config: TextLayoutConfig,
     resolved_content_width: f32,
   ) -> Self {
-    let mode = MeasurementMode::new(layout_config.wrap_mode, resolved_content_width);
+    let mode = MeasurementMode::new(text_layout_config.wrap_mode, resolved_content_width);
     let key = MeasurementKey::new(
       document.revision(),
-      layout_config,
+      text_layout_config,
       mode,
       font_lock::font_system_version(),
     );
@@ -54,7 +54,7 @@ impl MeasurementRequest {
     Self {
       key,
       document: document.clone(),
-      layout_config,
+      text_layout_config,
     }
   }
 }
@@ -73,17 +73,17 @@ pub(crate) struct MeasurementKey {
 impl MeasurementKey {
   fn new(
     document_revision: u64,
-    layout_config: LayoutConfig,
+    text_layout_config: TextLayoutConfig,
     mode: MeasurementMode,
     font_system_version: text::Version,
   ) -> Self {
     Self {
       document_revision,
       mode,
-      font: layout_config.font,
-      font_size_bits: layout_config.font_size.to_bits(),
-      line_height_bits: layout_config.line_height.to_bits(),
-      tab_policy: layout_config.tab_display_policy.normalized(),
+      font: text_layout_config.font,
+      font_size_bits: text_layout_config.font_size.to_bits(),
+      line_height_bits: text_layout_config.line_height.to_bits(),
+      tab_policy: text_layout_config.tab_display_policy.normalized(),
       font_system_version,
     }
   }
