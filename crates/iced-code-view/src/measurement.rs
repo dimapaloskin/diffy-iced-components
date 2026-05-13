@@ -43,11 +43,11 @@ impl MeasurementRequest {
     text_layout_config: TextLayoutConfig,
     resolved_content_width: f32,
   ) -> Self {
-    let mode = MeasurementKind::new(text_layout_config.wrap_mode, resolved_content_width);
+    let kind = MeasurementKind::new(text_layout_config.wrap_mode, resolved_content_width);
     let key = MeasurementKey::new(
       document.revision(),
       text_layout_config,
-      mode,
+      kind,
       font_lock::font_system_version(),
     );
 
