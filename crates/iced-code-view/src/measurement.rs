@@ -10,23 +10,23 @@ use crate::policies::TabDisplayPolicy;
 use crate::text_layout::{TextLayoutConfig, WrapMode};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) enum MeasurementMode {
-  NoWrapHorizontal,
-  SoftWrap { content_width_px: u32 },
+pub(crate) enum MeasurementKind {
+  NoWrapHorizontalExtent,
+  SoftWrapLineHeights { content_width_bits: u32 },
 }
 
-impl MeasurementMode {
+impl MeasurementKind {
   pub(crate) fn new(wrap_mode: WrapMode, resolved_content_width: f32) -> Self {
     match wrap_mode {
-      WrapMode::NoWrap => MeasurementMode::NoWrapHorizontal,
-      WrapMode::SoftWrap => MeasurementMode::SoftWrap {
-        content_width_px: quantize_logical_px(resolved_content_width),
+      WrapMode::NoWrap => MeasurementKind::NoWrapHorizontalExtent,
+      WrapMode::SoftWrap => MeasurementKind::SoftWrapLineHeights {
+        content_width_bits: content_width_bits(resolved_content_width),
       },
     }
   }
 
   pub(crate) fn needs_background_worker(self) -> bool {
-    matches!(self, MeasurementMode::NoWrapHorizontal)
+    matches!(self, MeasurementKind::NoWrapHorizontalExtent)
   }
 }
 
@@ -43,7 +43,7 @@ impl MeasurementRequest {
     text_layout_config: TextLayoutConfig,
     resolved_content_width: f32,
   ) -> Self {
-    let mode = MeasurementMode::new(text_layout_config.wrap_mode, resolved_content_width);
+    let mode = MeasurementKind::new(text_layout_config.wrap_mode, resolved_content_width);
     let key = MeasurementKey::new(
       document.revision(),
       text_layout_config,
@@ -62,7 +62,7 @@ impl MeasurementRequest {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct MeasurementKey {
   pub(crate) document_revision: u64,
-  pub(crate) mode: MeasurementMode,
+  pub(crate) kind: MeasurementKind,
   pub(crate) font: iced::Font,
   pub(crate) font_size_bits: u32,
   pub(crate) line_height_bits: u32,
@@ -74,12 +74,12 @@ impl MeasurementKey {
   fn new(
     document_revision: u64,
     text_layout_config: TextLayoutConfig,
-    mode: MeasurementMode,
+    kind: MeasurementKind,
     font_system_version: text::Version,
   ) -> Self {
     Self {
       document_revision,
-      mode,
+      kind,
       font: text_layout_config.font,
       font_size_bits: text_layout_config.font_size.to_bits(),
       line_height_bits: text_layout_config.line_height.to_bits(),
@@ -115,18 +115,20 @@ pub(crate) fn measure_document(
   request: MeasurementRequest,
   cancel: &AtomicBool,
 ) -> Option<MeasurementResult> {
-  match request.key.mode {
-    MeasurementMode::NoWrapHorizontal => no_wrap::measure_horizontal_extent(request, cancel),
-    MeasurementMode::SoftWrap { .. } => None,
+  match request.key.kind {
+    MeasurementKind::NoWrapHorizontalExtent => no_wrap::measure_horizontal_extent(request, cancel),
+    MeasurementKind::SoftWrapLineHeights { .. } => None,
   }
 }
 
-fn quantize_logical_px(value: f32) -> u32 {
-  if !value.is_finite() || value <= 0.0 {
-    return 0;
-  }
+fn content_width_bits(value: f32) -> u32 {
+  let width = if value.is_finite() {
+    value.max(0.0)
+  } else {
+    0.0
+  };
 
-  value.round().min(u32::MAX as f32) as u32
+  width.to_bits()
 }
 
 fn sanitize_extent(value: f32) -> f32 {

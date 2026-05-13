@@ -22,7 +22,7 @@ impl ScrollExtent {
         },
       },
       WrapMode::SoftWrap => Self {
-        horizontal: AxisExtent::Unknown,
+        horizontal: AxisExtent::Disabled,
         vertical: AxisExtent::Unknown,
       },
     }
@@ -44,6 +44,7 @@ impl ScrollExtent {
 pub(crate) enum AxisExtent {
   #[default]
   Unknown,
+  Disabled,
   Exact {
     content: f32,
   },
@@ -54,6 +55,7 @@ impl AxisExtent {
   pub(crate) fn clamp_offset(&self, offset: f32, viewport: f32) -> f32 {
     match self {
       AxisExtent::Unknown => offset.max(0.0),
+      AxisExtent::Disabled => 0.0,
       AxisExtent::Exact { content } => {
         let max = (*content - viewport).max(0.0);
         offset.clamp(0.0, max)
@@ -81,6 +83,14 @@ mod tests {
 
     assert_eq!(extent.clamp_offset(-10.0, 300.0), 0.0);
     assert_eq!(extent.clamp_offset(50.0, 300.0), 50.0);
+  }
+
+  #[test]
+  fn disabled_axis_always_clamps_to_zero() {
+    let extent = AxisExtent::Disabled;
+
+    assert_eq!(extent.clamp_offset(-10.0, 300.0), 0.0);
+    assert_eq!(extent.clamp_offset(50.0, 300.0), 0.0);
   }
 
   #[test]
@@ -151,13 +161,13 @@ mod tests {
   }
 
   #[test]
-  fn soft_wrap_extent_stays_unknown_until_wrapped_measurement_exists() {
+  fn soft_wrap_horizontal_extent_is_disabled() {
     let document = Document::new("a very long line that may wrap later");
 
     assert_eq!(
       ScrollExtent::new(&document, WrapMode::SoftWrap, 20.0, None),
       ScrollExtent {
-        horizontal: AxisExtent::Unknown,
+        horizontal: AxisExtent::Disabled,
         vertical: AxisExtent::Unknown,
       }
     );

@@ -270,7 +270,7 @@ impl CodeViewController {
       return Task::none();
     }
 
-    if !request.key.mode.needs_background_worker() {
+    if !request.key.kind.needs_background_worker() {
       return Task::none();
     }
 
