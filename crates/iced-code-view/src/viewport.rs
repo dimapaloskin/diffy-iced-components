@@ -40,7 +40,7 @@ impl Viewport {
       height: surface_height,
     };
 
-    let content_height = (surface_height - padding.top - padding.bottom).max(0.0);
+    let content_height = (surface_height - padding.vertical.top - padding.vertical.bottom).max(0.0);
 
     let gutter_width = if gutter.enabled {
       gutter.requested_width.min(surface_width).max(0.0)
@@ -57,7 +57,7 @@ impl Viewport {
       },
       content_bounds: iced::Rectangle {
         x: surface_bounds.x,
-        y: padding.top,
+        y: padding.vertical.top,
         width: gutter_width,
         height: content_height,
       },
@@ -71,9 +71,9 @@ impl Viewport {
     };
 
     let text_content_bounds = iced::Rectangle {
-      x: text_bounds.x + padding.text_left,
-      y: text_bounds.y + padding.top,
-      width: (text_bounds.width - padding.text_left - padding.text_right).max(0.0),
+      x: text_bounds.x + padding.text.left,
+      y: text_bounds.y + padding.vertical.top,
+      width: (text_bounds.width - padding.text.left - padding.text.right).max(0.0),
       height: content_height,
     };
 
@@ -134,12 +134,7 @@ mod tests {
   fn viewport_splits_surface_gutter_text_and_content_bounds() {
     let viewport = Viewport::new(
       iced::Size::new(200.0, 100.0),
-      CodeViewPadding {
-        top: 5.0,
-        bottom: 11.0,
-        text_left: 13.0,
-        text_right: 7.0,
-      },
+      CodeViewPadding::new((5.0, 11.0), (13.0, 7.0)),
       gutter_metrics(),
       iced::Vector::new(3.0, 4.0),
     );
@@ -191,12 +186,7 @@ mod tests {
   fn viewport_clamps_gutter_to_surface_width() {
     let viewport = Viewport::new(
       iced::Size::new(10.0, 40.0),
-      CodeViewPadding {
-        top: 2.0,
-        bottom: 3.0,
-        text_left: 5.0,
-        text_right: 4.0,
-      },
+      CodeViewPadding::new((2.0, 3.0), (5.0, 4.0)),
       GutterMetrics {
         requested_width: 100.0,
         ..gutter_metrics()

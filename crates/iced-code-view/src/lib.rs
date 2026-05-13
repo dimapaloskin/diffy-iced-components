@@ -22,6 +22,6 @@ pub use controller::{CodeViewController, CodeViewMessage};
 pub use document::Document;
 pub use gutter::GutterConfig;
 pub use layout::WrapMode;
-pub use padding::{CodeViewPadding, GutterPadding};
+pub use padding::{CodeViewPadding, GutterPadding, HorizontalPadding, VerticalPadding};
 pub use policies::{LineEndingPolicy, TabDisplayPolicy};
 pub use style::{CodeViewStyle, GutterStyle};

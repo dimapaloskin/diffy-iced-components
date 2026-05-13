@@ -57,7 +57,7 @@ impl App {
       .with_font_size(15.0)
       .with_gutter_config(gutter_config)
       .with_style(style)
-      .with_padding(CodeViewPadding::text_horizontal(8.0));
+      .with_padding(CodeViewPadding::new(0.0, 8.0));
 
     (
       Self {

@@ -48,9 +48,9 @@ impl GutterMetrics {
   pub(crate) fn line_numbers(label_width: f32, gutter_config: &GutterConfig) -> Self {
     Self {
       enabled: true,
-      requested_width: gutter_config.padding.left
+      requested_width: gutter_config.padding.horizontal.left
         + label_width
-        + gutter_config.padding.right
+        + gutter_config.padding.horizontal.right
         + gutter_config.separator_width,
       padding: gutter_config.padding,
       separator_width: gutter_config.separator_width,
@@ -67,7 +67,8 @@ impl GutterMetrics {
 
   pub(crate) fn render_label_width(&self, gutter_width: f32) -> f32 {
     let separator_width = self.visible_separator_width(gutter_width);
-    (gutter_width - self.padding.left - self.padding.right - separator_width).max(0.0)
+    (gutter_width - self.padding.horizontal.left - self.padding.horizontal.right - separator_width)
+      .max(0.0)
   }
 }
 
@@ -233,10 +234,10 @@ mod tests {
         &document,
         layout_config,
         GutterConfig {
-          padding: GutterPadding::new(
-            gutter_config.padding.left + 4.0,
-            gutter_config.padding.right,
-          ),
+          padding: GutterPadding::new((
+            gutter_config.padding.horizontal.left + 4.0,
+            gutter_config.padding.horizontal.right,
+          )),
           ..gutter_config
         },
       )
@@ -248,10 +249,10 @@ mod tests {
         &document,
         layout_config,
         GutterConfig {
-          padding: GutterPadding::new(
-            gutter_config.padding.left,
-            gutter_config.padding.right + 4.0,
-          ),
+          padding: GutterPadding::new((
+            gutter_config.padding.horizontal.left,
+            gutter_config.padding.horizontal.right + 4.0,
+          )),
           ..gutter_config
         },
       )
