@@ -88,7 +88,7 @@ impl GutterWidthKey {
     font_system_version: text::Version,
   ) -> Self {
     Self {
-      source_line_count: request.document.source_line_count(),
+      source_line_count: request.document.line_count(),
       layout_font: request.layout_config.font,
       font_size_bits: request.layout_config.font_size.to_bits(),
       padding_bits: request.gutter_config.padding.to_bits(),

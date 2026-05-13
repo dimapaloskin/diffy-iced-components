@@ -18,7 +18,7 @@ impl ScrollExtent {
       WrapMode::NoWrap => Self {
         horizontal: no_wrap_horizontal_extent(measurement_result),
         vertical: AxisExtent::Exact {
-          content: document.source_line_count() as f32 * line_height,
+          content: document.line_count() as f32 * line_height,
         },
       },
       WrapMode::SoftWrap => Self {

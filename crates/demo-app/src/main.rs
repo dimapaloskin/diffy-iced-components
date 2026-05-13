@@ -106,7 +106,7 @@ impl App {
     let status = format!(
       "file: {}, lines: {}",
       FILES[self.selected_file].0,
-      self.code_view.source_line_count()
+      self.code_view.line_count()
     );
 
     container(

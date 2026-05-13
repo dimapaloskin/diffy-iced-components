@@ -48,7 +48,7 @@ impl Document {
     self.data.line_ending_policy
   }
 
-  pub(crate) fn source_line_count(&self) -> usize {
+  pub fn line_count(&self) -> usize {
     self.data.line_index.line_count()
   }
 

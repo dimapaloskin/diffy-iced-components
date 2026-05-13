@@ -53,7 +53,7 @@ fn measure_line_number_metrics(request: &GutterMeasureRequest<'_>) -> GutterMetr
 
   // Digits can have different widths in proportional fonts.
   // Measure same-length digit samples and reserve the widest one.
-  let label_width = widest_line_number_samples(request.document.source_line_count())
+  let label_width = widest_line_number_samples(request.document.line_count())
     .map(|sample| measure_sample_width(&mut buffer, raw_fs, &attrs, &sample))
     .fold(0.0, f32::max);
 

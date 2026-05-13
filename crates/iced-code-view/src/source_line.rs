@@ -11,7 +11,7 @@ impl SourceLineHeights {
   pub(crate) fn for_request(request: &LayoutRequest<'_>) -> Self {
     match request.config.wrap_mode {
       WrapMode::NoWrap => Self::Uniform(uniform::Heights::new(
-        request.document.source_line_count(),
+        request.document.line_count(),
         request.config.line_height,
       )),
       WrapMode::SoftWrap => {

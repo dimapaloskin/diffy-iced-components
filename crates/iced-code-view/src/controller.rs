@@ -250,8 +250,8 @@ impl CodeViewController {
     self.session_id = next_session_id();
   }
 
-  pub fn source_line_count(&self) -> usize {
-    self.document.source_line_count()
+  pub fn line_count(&self) -> usize {
+    self.document.line_count()
   }
 
   fn cancel_active_measurement(&mut self) {
