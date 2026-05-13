@@ -95,9 +95,26 @@ impl CodeViewController {
     self
   }
 
+  pub fn set_width(&mut self, width: Length) {
+    self.width = width;
+    self.invalidate_measurement();
+  }
+
+  pub fn width(&self) -> Length {
+    self.width
+  }
+
   pub fn with_height(mut self, height: Length) -> Self {
     self.height = height;
     self
+  }
+
+  pub fn set_height(&mut self, height: Length) {
+    self.height = height;
+  }
+
+  pub fn height(&self) -> Length {
+    self.height
   }
 
   pub fn with_border_radius(mut self, border_radius: iced::border::Radius) -> Self {
@@ -105,9 +122,26 @@ impl CodeViewController {
     self
   }
 
+  pub fn set_border_radius(&mut self, border_radius: iced::border::Radius) {
+    self.border_radius = border_radius;
+  }
+
+  pub fn border_radius(&self) -> iced::border::Radius {
+    self.border_radius
+  }
+
   pub fn with_padding(mut self, padding: CodeViewPadding) -> Self {
     self.padding = padding;
     self
+  }
+
+  pub fn set_padding(&mut self, padding: CodeViewPadding) {
+    self.padding = padding;
+    self.invalidate_measurement();
+  }
+
+  pub fn padding(&self) -> CodeViewPadding {
+    self.padding
   }
 
   pub fn with_font(mut self, font: iced::Font) -> Self {
@@ -115,9 +149,27 @@ impl CodeViewController {
     self
   }
 
+  pub fn set_font(&mut self, font: iced::Font) {
+    self.layout_config.font = font;
+    self.invalidate_measurement();
+  }
+
+  pub fn font(&self) -> iced::Font {
+    self.layout_config.font
+  }
+
   pub fn with_font_size(mut self, font_size: f32) -> Self {
     self.layout_config.font_size = font_size;
     self
+  }
+
+  pub fn set_font_size(&mut self, font_size: f32) {
+    self.layout_config.font_size = font_size;
+    self.invalidate_measurement();
+  }
+
+  pub fn font_size(&self) -> f32 {
+    self.layout_config.font_size
   }
 
   pub fn with_line_height(mut self, line_height: f32) -> Self {
@@ -125,9 +177,27 @@ impl CodeViewController {
     self
   }
 
+  pub fn set_line_height(&mut self, line_height: f32) {
+    self.layout_config.line_height = line_height;
+    self.invalidate_measurement();
+  }
+
+  pub fn line_height(&self) -> f32 {
+    self.layout_config.line_height
+  }
+
   pub fn with_wrap_mode(mut self, wrap_mode: WrapMode) -> Self {
     self.layout_config.wrap_mode = wrap_mode;
     self
+  }
+
+  pub fn set_wrap_mode(&mut self, wrap_mode: WrapMode) {
+    self.layout_config.wrap_mode = wrap_mode;
+    self.invalidate_measurement();
+  }
+
+  pub fn wrap_mode(&self) -> WrapMode {
+    self.layout_config.wrap_mode
   }
 
   pub fn with_tab_display_policy(mut self, tab_display_policy: TabDisplayPolicy) -> Self {
@@ -135,9 +205,27 @@ impl CodeViewController {
     self
   }
 
+  pub fn set_tab_display_policy(&mut self, tab_display_policy: TabDisplayPolicy) {
+    self.layout_config.tab_display_policy = tab_display_policy;
+    self.invalidate_measurement();
+  }
+
+  pub fn tab_display_policy(&self) -> TabDisplayPolicy {
+    self.layout_config.tab_display_policy
+  }
+
   pub fn with_gutter_config(mut self, gutter_config: GutterConfig) -> Self {
     self.gutter_config = gutter_config;
     self
+  }
+
+  pub fn set_gutter_config(&mut self, gutter_config: GutterConfig) {
+    self.gutter_config = gutter_config;
+    self.invalidate_measurement();
+  }
+
+  pub fn gutter_config(&self) -> GutterConfig {
+    self.gutter_config
   }
 
   pub fn with_style(mut self, style: CodeViewStyle) -> Self {
@@ -145,30 +233,21 @@ impl CodeViewController {
     self
   }
 
-  pub fn gutter_config(&self) -> GutterConfig {
-    self.gutter_config
-  }
-
-  pub fn set_gutter_config(&mut self, gutter_config: GutterConfig) {
-    self.gutter_config = gutter_config;
+  pub fn set_style(&mut self, style: CodeViewStyle) {
+    self.style = style;
   }
 
   pub fn style(&self) -> CodeViewStyle {
     self.style
   }
-
-  pub fn set_style(&mut self, style: CodeViewStyle) {
-    self.style = style;
-  }
 }
 
 impl CodeViewController {
   pub fn set_document(&mut self, document: Document) {
-    self.cancel_active_measurement();
+    self.invalidate_measurement();
 
     self.document = document;
     self.session_id = next_session_id();
-    self.measurement_result = None;
   }
 
   pub fn source_line_count(&self) -> usize {
@@ -179,6 +258,11 @@ impl CodeViewController {
     if let Some(active) = self.active_measurement.take() {
       active.cancel();
     }
+  }
+
+  fn invalidate_measurement(&mut self) {
+    self.cancel_active_measurement();
+    self.measurement_result = None;
   }
 
   fn on_measure_requested(&mut self, request: MeasurementRequest) -> Task<CodeViewMessage> {
