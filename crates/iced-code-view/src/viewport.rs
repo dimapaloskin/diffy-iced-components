@@ -1,5 +1,5 @@
 use crate::gutter::GutterMetrics;
-use crate::padding::CodeViewPadding;
+use crate::insets::CodeViewInsets;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub(crate) struct ViewportArea {
@@ -26,7 +26,7 @@ pub(crate) struct Viewport {
 impl Viewport {
   pub(crate) fn new(
     widget_size: iced::Size,
-    padding: CodeViewPadding,
+    insets: CodeViewInsets,
     gutter: GutterMetrics,
     scroll_offset: iced::Vector,
   ) -> Self {
@@ -40,7 +40,7 @@ impl Viewport {
       height: surface_height,
     };
 
-    let content_height = (surface_height - padding.vertical.top - padding.vertical.bottom).max(0.0);
+    let content_height = (surface_height - insets.vertical.top - insets.vertical.bottom).max(0.0);
 
     let gutter_width = if gutter.enabled {
       gutter.requested_width.min(surface_width).max(0.0)
@@ -57,7 +57,7 @@ impl Viewport {
       },
       content_bounds: iced::Rectangle {
         x: surface_bounds.x,
-        y: padding.vertical.top,
+        y: insets.vertical.top,
         width: gutter_width,
         height: content_height,
       },
@@ -71,9 +71,9 @@ impl Viewport {
     };
 
     let text_content_bounds = iced::Rectangle {
-      x: text_bounds.x + padding.text.left,
-      y: text_bounds.y + padding.vertical.top,
-      width: (text_bounds.width - padding.text.left - padding.text.right).max(0.0),
+      x: text_bounds.x + insets.text.left,
+      y: text_bounds.y + insets.vertical.top,
+      width: (text_bounds.width - insets.text.left - insets.text.right).max(0.0),
       height: content_height,
     };
 
@@ -120,13 +120,13 @@ fn offset_bounds(bounds: iced::Rectangle, widget_bounds: iced::Rectangle) -> ice
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::padding::{HorizontalPadding, VerticalPadding};
+  use crate::insets::{HorizontalInsets, VerticalInsets};
 
   fn gutter_metrics() -> GutterMetrics {
     GutterMetrics {
       enabled: true,
       requested_width: 40.0,
-      padding: crate::padding::GutterPadding::ZERO,
+      insets: crate::insets::GutterInsets::ZERO,
       separator_width: 1.0,
     }
   }
@@ -135,9 +135,9 @@ mod tests {
   fn viewport_splits_surface_gutter_text_and_content_bounds() {
     let viewport = Viewport::new(
       iced::Size::new(200.0, 100.0),
-      CodeViewPadding::new(
-        VerticalPadding::new(5.0, 11.0),
-        HorizontalPadding::new(13.0, 7.0),
+      CodeViewInsets::new(
+        VerticalInsets::new(5.0, 11.0),
+        HorizontalInsets::new(13.0, 7.0),
       ),
       gutter_metrics(),
       iced::Vector::new(3.0, 4.0),
@@ -190,9 +190,9 @@ mod tests {
   fn viewport_clamps_gutter_to_surface_width() {
     let viewport = Viewport::new(
       iced::Size::new(10.0, 40.0),
-      CodeViewPadding::new(
-        VerticalPadding::new(2.0, 3.0),
-        HorizontalPadding::new(5.0, 4.0),
+      CodeViewInsets::new(
+        VerticalInsets::new(2.0, 3.0),
+        HorizontalInsets::new(5.0, 4.0),
       ),
       GutterMetrics {
         requested_width: 100.0,

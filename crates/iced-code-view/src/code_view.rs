@@ -12,8 +12,8 @@ use iced::mouse::ScrollDelta;
 
 use crate::document::Document;
 use crate::gutter::{GutterConfig, GutterMetricsRequest, GutterRenderArtifactRequest};
+use crate::insets::CodeViewInsets;
 use crate::measurement::{MeasurementRequest, MeasurementResult};
-use crate::padding::CodeViewPadding;
 use crate::scroll::ScrollExtent;
 use crate::state::CodeViewState;
 use crate::style::CodeViewStyle;
@@ -31,7 +31,7 @@ pub(crate) struct CodeViewInputs<'a> {
   pub(crate) width: Length,
   pub(crate) height: Length,
   pub(crate) text_layout_config: TextLayoutConfig,
-  pub(crate) padding: CodeViewPadding,
+  pub(crate) insets: CodeViewInsets,
   pub(crate) border_radius: iced::border::Radius,
   pub(crate) gutter_config: GutterConfig,
   pub(crate) style: CodeViewStyle,
@@ -100,7 +100,7 @@ where
       document,
       width,
       height,
-      padding,
+      insets,
       text_layout_config,
       gutter_config,
       measurement_result,
@@ -128,7 +128,7 @@ where
       gutter_config,
     });
 
-    let viewport = Viewport::new(resolved_size, padding, gutter_metrics, scroll_offset);
+    let viewport = Viewport::new(resolved_size, insets, gutter_metrics, scroll_offset);
 
     let measurement_request = MeasurementRequest::new(
       document,

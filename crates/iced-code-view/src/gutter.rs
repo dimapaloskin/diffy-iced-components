@@ -6,7 +6,7 @@ use iced::advanced::graphics::text;
 
 use crate::cosmic_buffer::CosmicBufferPayload;
 use crate::document::Document;
-use crate::padding::GutterPadding;
+use crate::insets::GutterInsets;
 use crate::text_layout::TextLayoutConfig;
 use crate::text_layout::VisibleTextProjection;
 
@@ -38,7 +38,7 @@ impl Default for GutterContent {
 pub struct GutterConfig {
   pub visibility: GutterVisibility,
   pub content: GutterContent,
-  pub padding: GutterPadding,
+  pub insets: GutterInsets,
   pub separator_width: f32,
 }
 
@@ -53,7 +53,7 @@ impl Default for GutterConfig {
     Self {
       visibility: GutterVisibility::Visible,
       content: GutterContent::default(),
-      padding: GutterPadding::default(),
+      insets: GutterInsets::default(),
       separator_width: 1.0,
     }
   }
@@ -63,7 +63,7 @@ impl Default for GutterConfig {
 pub(crate) struct GutterMetrics {
   pub(crate) enabled: bool,
   pub(crate) requested_width: f32,
-  pub(crate) padding: GutterPadding,
+  pub(crate) insets: GutterInsets,
   pub(crate) separator_width: f32,
 }
 
@@ -72,7 +72,7 @@ impl GutterMetrics {
     Self {
       enabled: false,
       requested_width: 0.0,
-      padding: GutterPadding::ZERO,
+      insets: GutterInsets::ZERO,
       separator_width: 0.0,
     }
   }
@@ -80,11 +80,11 @@ impl GutterMetrics {
   pub(crate) fn line_numbers(label_width: f32, gutter_config: &GutterConfig) -> Self {
     Self {
       enabled: true,
-      requested_width: gutter_config.padding.horizontal.left
+      requested_width: gutter_config.insets.horizontal.left
         + label_width
-        + gutter_config.padding.horizontal.right
+        + gutter_config.insets.horizontal.right
         + gutter_config.separator_width,
-      padding: gutter_config.padding,
+      insets: gutter_config.insets,
       separator_width: gutter_config.separator_width,
     }
   }
@@ -99,7 +99,7 @@ impl GutterMetrics {
 
   pub(crate) fn render_label_width(&self, gutter_width: f32) -> f32 {
     let separator_width = self.visible_separator_width(gutter_width);
-    (gutter_width - self.padding.horizontal.left - self.padding.horizontal.right - separator_width)
+    (gutter_width - self.insets.horizontal.left - self.insets.horizontal.right - separator_width)
       .max(0.0)
   }
 }
@@ -109,7 +109,7 @@ pub(crate) struct GutterMetricsKey {
   pub(crate) source_line_count: usize,
   pub(crate) text_font: iced::Font,
   pub(crate) font_size_bits: u32,
-  pub(crate) padding_bits: u64,
+  pub(crate) insets_bits: u64,
   pub(crate) separator_width_bits: u32,
   pub(crate) font_system_version: text::Version,
 }
@@ -123,7 +123,7 @@ impl GutterMetricsKey {
       source_line_count: request.document.line_count(),
       text_font: request.text_layout_config.font,
       font_size_bits: request.text_layout_config.font_size.to_bits(),
-      padding_bits: request.gutter_config.padding.to_bits(),
+      insets_bits: request.gutter_config.insets.to_bits(),
       separator_width_bits: request.gutter_config.separator_width.to_bits(),
       font_system_version,
     }
@@ -218,7 +218,7 @@ pub(crate) struct GutterRenderArtifactRequest<'a> {
 mod tests {
   use super::*;
   use crate::font_lock;
-  use crate::padding::HorizontalPadding;
+  use crate::insets::HorizontalInsets;
   use crate::text_layout::projection::VisibleTextRow;
 
   fn projection(rows: &[(usize, usize, f32)]) -> VisibleTextProjection {
@@ -256,7 +256,7 @@ mod tests {
   }
 
   #[test]
-  fn gutter_metrics_key_tracks_padding_and_metrics() {
+  fn gutter_metrics_key_tracks_insets_and_metrics() {
     let document = Document::new("one\ntwo\nthree");
     let text_layout_config = TextLayoutConfig::default();
     let gutter_config = GutterConfig::default();
@@ -267,9 +267,9 @@ mod tests {
         &document,
         text_layout_config,
         GutterConfig {
-          padding: GutterPadding::new(HorizontalPadding::new(
-            gutter_config.padding.horizontal.left + 4.0,
-            gutter_config.padding.horizontal.right,
+          insets: GutterInsets::new(HorizontalInsets::new(
+            gutter_config.insets.horizontal.left + 4.0,
+            gutter_config.insets.horizontal.right,
           )),
           ..gutter_config
         },
@@ -282,9 +282,9 @@ mod tests {
         &document,
         text_layout_config,
         GutterConfig {
-          padding: GutterPadding::new(HorizontalPadding::new(
-            gutter_config.padding.horizontal.left,
-            gutter_config.padding.horizontal.right + 4.0,
+          insets: GutterInsets::new(HorizontalInsets::new(
+            gutter_config.insets.horizontal.left,
+            gutter_config.insets.horizontal.right + 4.0,
           )),
           ..gutter_config
         },

@@ -1,19 +1,19 @@
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct CodeViewPadding {
+pub struct CodeViewInsets {
   // Top/bottom gap for text and gutter labels.
   // Background still fills the whole widget.
-  pub vertical: VerticalPadding,
+  pub vertical: VerticalInsets,
   // Left/right gap only for the text area.
-  pub text: HorizontalPadding,
+  pub text: HorizontalInsets,
 }
 
-impl CodeViewPadding {
+impl CodeViewInsets {
   pub const ZERO: Self = Self {
-    vertical: VerticalPadding::ZERO,
-    text: HorizontalPadding::ZERO,
+    vertical: VerticalInsets::ZERO,
+    text: HorizontalInsets::ZERO,
   };
 
-  pub fn new(vertical: impl Into<VerticalPadding>, text: impl Into<HorizontalPadding>) -> Self {
+  pub fn new(vertical: impl Into<VerticalInsets>, text: impl Into<HorizontalInsets>) -> Self {
     Self {
       vertical: vertical.into(),
       text: text.into(),
@@ -21,23 +21,23 @@ impl CodeViewPadding {
   }
 }
 
-impl Default for CodeViewPadding {
+impl Default for CodeViewInsets {
   fn default() -> Self {
     Self::ZERO
   }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct GutterPadding {
-  pub horizontal: HorizontalPadding,
+pub struct GutterInsets {
+  pub horizontal: HorizontalInsets,
 }
 
-impl GutterPadding {
+impl GutterInsets {
   pub const ZERO: Self = Self {
-    horizontal: HorizontalPadding::ZERO,
+    horizontal: HorizontalInsets::ZERO,
   };
 
-  pub fn new(horizontal: impl Into<HorizontalPadding>) -> Self {
+  pub fn new(horizontal: impl Into<HorizontalInsets>) -> Self {
     Self {
       horizontal: horizontal.into(),
     }
@@ -48,31 +48,31 @@ impl GutterPadding {
   }
 }
 
-impl From<HorizontalPadding> for GutterPadding {
-  fn from(horizontal: HorizontalPadding) -> Self {
+impl From<HorizontalInsets> for GutterInsets {
+  fn from(horizontal: HorizontalInsets) -> Self {
     Self { horizontal }
   }
 }
 
-impl From<f32> for GutterPadding {
+impl From<f32> for GutterInsets {
   fn from(value: f32) -> Self {
     Self::new(value)
   }
 }
 
-impl Default for GutterPadding {
+impl Default for GutterInsets {
   fn default() -> Self {
     Self::new(8.0)
   }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct HorizontalPadding {
+pub struct HorizontalInsets {
   pub left: f32,
   pub right: f32,
 }
 
-impl HorizontalPadding {
+impl HorizontalInsets {
   pub const ZERO: Self = Self::new(0.0, 0.0);
 
   pub const fn new(left: f32, right: f32) -> Self {
@@ -91,25 +91,25 @@ impl HorizontalPadding {
   }
 }
 
-impl From<f32> for HorizontalPadding {
+impl From<f32> for HorizontalInsets {
   fn from(value: f32) -> Self {
     Self::symmetric(value)
   }
 }
 
-impl Default for HorizontalPadding {
+impl Default for HorizontalInsets {
   fn default() -> Self {
     Self::ZERO
   }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct VerticalPadding {
+pub struct VerticalInsets {
   pub top: f32,
   pub bottom: f32,
 }
 
-impl VerticalPadding {
+impl VerticalInsets {
   pub const ZERO: Self = Self::new(0.0, 0.0);
 
   pub const fn new(top: f32, bottom: f32) -> Self {
@@ -124,13 +124,13 @@ impl VerticalPadding {
   }
 }
 
-impl From<f32> for VerticalPadding {
+impl From<f32> for VerticalInsets {
   fn from(value: f32) -> Self {
     Self::symmetric(value)
   }
 }
 
-impl Default for VerticalPadding {
+impl Default for VerticalInsets {
   fn default() -> Self {
     Self::ZERO
   }

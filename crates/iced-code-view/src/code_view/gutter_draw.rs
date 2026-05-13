@@ -112,7 +112,7 @@ impl<'a, Message> CodeView<'a, Message> {
       return;
     }
 
-    let x = gutter_area.content_bounds.x + measured_gutter.metrics.padding.horizontal.left;
+    let x = gutter_area.content_bounds.x + measured_gutter.metrics.insets.horizontal.left;
     let y = gutter_area.content_bounds.y + render_artifact.first_row_viewport_y;
 
     renderer.fill_raw(text::Raw {

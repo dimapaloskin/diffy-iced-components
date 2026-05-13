@@ -7,8 +7,8 @@ use crate::background;
 use crate::code_view::{CodeView, CodeViewInputs};
 use crate::document::Document;
 use crate::gutter::GutterConfig;
+use crate::insets::CodeViewInsets;
 use crate::measurement::{MeasurementKey, MeasurementRequest, MeasurementResult, measure_document};
-use crate::padding::CodeViewPadding;
 use crate::policies::TabDisplayPolicy;
 use crate::style::CodeViewStyle;
 use crate::text_layout::{TextLayoutConfig, WrapMode};
@@ -18,7 +18,7 @@ pub struct CodeViewController {
   width: Length,
   height: Length,
   text_layout_config: TextLayoutConfig,
-  padding: CodeViewPadding,
+  insets: CodeViewInsets,
   border_radius: iced::border::Radius,
   session_id: u64,
   gutter_config: GutterConfig,
@@ -79,7 +79,7 @@ impl CodeViewController {
       width: Length::Fill,
       height: Length::Fill,
       text_layout_config: TextLayoutConfig::default(),
-      padding: CodeViewPadding::default(),
+      insets: CodeViewInsets::default(),
       border_radius: iced::border::Radius::default(),
       session_id: next_session_id(),
       gutter_config: GutterConfig::default(),
@@ -130,18 +130,18 @@ impl CodeViewController {
     self.border_radius
   }
 
-  pub fn with_padding(mut self, padding: CodeViewPadding) -> Self {
-    self.padding = padding;
+  pub fn with_insets(mut self, insets: CodeViewInsets) -> Self {
+    self.insets = insets;
     self
   }
 
-  pub fn set_padding(&mut self, padding: CodeViewPadding) {
-    self.padding = padding;
+  pub fn set_insets(&mut self, insets: CodeViewInsets) {
+    self.insets = insets;
     self.invalidate_measurement();
   }
 
-  pub fn padding(&self) -> CodeViewPadding {
-    self.padding
+  pub fn insets(&self) -> CodeViewInsets {
+    self.insets
   }
 
   pub fn with_font(mut self, font: iced::Font) -> Self {
@@ -343,7 +343,7 @@ impl CodeViewController {
       width: self.width,
       height: self.height,
       text_layout_config: self.text_layout_config,
-      padding: self.padding,
+      insets: self.insets,
       border_radius: self.border_radius,
       gutter_config: self.gutter_config,
       style: self.style,

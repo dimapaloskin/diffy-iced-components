@@ -2,8 +2,8 @@ use iced::widget::{button, column, container, row, space, text};
 use iced::{Element, Length, Task, alignment};
 
 use iced_code_view::{
-  CodeViewController, CodeViewMessage, CodeViewPadding, CodeViewStyle, Document, GutterConfig,
-  GutterPadding,
+  CodeViewController, CodeViewInsets, CodeViewMessage, CodeViewStyle, Document, GutterConfig,
+  GutterInsets,
 };
 
 const FILES: &[(&str, &str)] = &[
@@ -38,7 +38,7 @@ impl App {
   fn new() -> (Self, Task<AppMessage>) {
     let gutter_config = GutterConfig {
       separator_width: 2.0,
-      padding: GutterPadding::new(8.0),
+      insets: GutterInsets::new(8.0),
       ..Default::default()
     };
 
@@ -57,7 +57,7 @@ impl App {
       .with_font_size(15.0)
       .with_gutter_config(gutter_config)
       .with_style(style)
-      .with_padding(CodeViewPadding::new(0.0, 8.0));
+      .with_insets(CodeViewInsets::new(0.0, 8.0));
 
     (
       Self {
