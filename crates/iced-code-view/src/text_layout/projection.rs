@@ -1,7 +1,5 @@
 use iced::advanced::graphics::text::cosmic_text;
 
-use crate::source_line::SourceLineHeights;
-
 #[allow(dead_code)]
 #[derive(Debug)]
 pub(crate) struct VisibleTextRow {
@@ -9,7 +7,6 @@ pub(crate) struct VisibleTextRow {
   pub(crate) wrap_row_index: usize,
 
   pub(crate) y_inside_source_line: f32,
-  pub(crate) document_y: f32,
   pub(crate) viewport_y: f32,
 
   pub(crate) height: f32,
@@ -23,11 +20,7 @@ pub(crate) struct VisibleTextProjection {
 }
 
 impl VisibleTextProjection {
-  pub(crate) fn build(
-    buffer: &cosmic_text::Buffer,
-    source_line_heights: &SourceLineHeights,
-    content_size: iced::Size,
-  ) -> Self {
+  pub(crate) fn build(buffer: &cosmic_text::Buffer, content_size: iced::Size) -> Self {
     let backend_scroll = buffer.scroll();
     let metrics = buffer.metrics();
 
@@ -41,8 +34,6 @@ impl VisibleTextProjection {
 
     let iter = buffer.lines.iter().enumerate().skip(backend_scroll.line);
     'source_lines: for (source_line_index, line) in iter {
-      let source_line_start_document_y =
-        source_line_heights.source_line_start_document_y(source_line_index);
       // Basically, layout_opt() is the vector of wrapped lines for a given source line.
       // In our terms, we call it `rows`, but here we stick to the cosmic-text convention.
       let layout_lines = line
@@ -58,7 +49,6 @@ impl VisibleTextProjection {
         let is_visible = row_bottom > 0.0 && viewport_y < content_size.height;
 
         if is_visible {
-          let document_y = source_line_start_document_y + y_inside_source_line;
           text_width = text_width.max(layout_line.w);
           visible_height += height;
 
@@ -66,7 +56,6 @@ impl VisibleTextProjection {
             source_line_index,
             wrap_row_index,
             y_inside_source_line,
-            document_y,
             viewport_y,
             height,
             width: layout_line.w,

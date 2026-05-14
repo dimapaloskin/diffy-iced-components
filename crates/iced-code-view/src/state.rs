@@ -5,16 +5,23 @@ use crate::gutter::{
   GutterRowsSignature, MeasuredGutter,
 };
 use crate::measurement::{MeasurementKey, MeasurementRequest, MeasurementResult};
-use crate::scroll::ScrollExtent;
+use crate::scroll::{ScrollExtent, ScrollState};
 use crate::text_layout::VisibleTextLayout;
 use crate::text_layout::engine as text_layout_engine;
 use crate::text_layout::{TextLayoutKey, TextLayoutRequest};
 use crate::viewport::Viewport;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ScrollChange {
+  RedrawOnly,
+  RequiresLayout,
+}
+
 #[derive(Default)]
 pub(crate) struct CodeViewState {
   pub(crate) text_layout: TextLayoutState,
   pub(crate) gutter: GutterState,
+  pub(crate) scroll: ScrollState,
   pub(crate) viewport: Viewport,
   pub(crate) scroll_extent: ScrollExtent,
   pub(crate) pending_measurement_request: Option<MeasurementRequest>,
@@ -137,19 +144,77 @@ impl CodeViewState {
     Some(request.clone())
   }
 
-  pub(crate) fn try_apply_wheel_delta(&mut self, delta: iced::Vector) -> bool {
-    let old = self.viewport.scroll_offset;
-    let candidate = iced::Vector::new(old.x - delta.x, old.y - delta.y);
-
-    let scroll_offset = self
-      .scroll_extent
-      .clamp_offset(candidate, self.viewport.scroll_viewport_size());
-
-    if scroll_offset == old {
-      return false;
+  pub(crate) fn try_apply_wheel_delta(&mut self, delta: iced::Vector) -> Option<ScrollChange> {
+    if !delta.x.is_finite() || !delta.y.is_finite() {
+      return None;
     }
 
-    self.viewport.scroll_offset = scroll_offset;
-    true
+    let horizontal_px = self.scroll_extent.horizontal.clamp_offset(
+      self.scroll.horizontal_px - delta.x,
+      self.viewport.scroll_viewport_size().width,
+    );
+    // iced wheel delta is positive when scrolling up.
+    // cosmic Scroll is positive when scrolled down.
+    let vertical = self.scroll.vertical.scrolled_by(-delta.y);
+
+    let horizontal_changed = horizontal_px != self.scroll.horizontal_px;
+    let vertical_changed = vertical != self.scroll.vertical;
+
+    match (vertical_changed, horizontal_changed) {
+      (false, false) => None,
+      (false, true) => {
+        self.scroll.horizontal_px = horizontal_px;
+        Some(ScrollChange::RedrawOnly)
+      }
+      (true, _) => {
+        self.scroll.vertical = vertical;
+        self.scroll.horizontal_px = horizontal_px;
+        Some(ScrollChange::RequiresLayout)
+      }
+    }
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use crate::scroll::{HorizontalExtent, VerticalScroll};
+
+  #[test]
+  fn wheel_up_at_document_top_is_noop() {
+    let mut state = CodeViewState::default();
+
+    let change = state.try_apply_wheel_delta(iced::Vector::new(0.0, 50.0));
+
+    assert_eq!(change, None);
+    assert_eq!(state.scroll.vertical, VerticalScroll::ZERO);
+  }
+
+  #[test]
+  fn wheel_at_top_with_horizontal_delta_only_needs_redraw() {
+    let mut state = CodeViewState::default();
+    state.scroll_extent.horizontal = HorizontalExtent::Exact { content: 1000.0 };
+    state.viewport.text.content_bounds.width = 300.0;
+
+    let change = state.try_apply_wheel_delta(iced::Vector::new(-10.0, 30.0));
+
+    assert_eq!(change, Some(ScrollChange::RedrawOnly));
+    assert_eq!(state.scroll.vertical, VerticalScroll::ZERO);
+    assert_eq!(state.scroll.horizontal_px, 10.0);
+  }
+
+  #[test]
+  fn non_finite_wheel_delta_is_ignored() {
+    let mut state = CodeViewState::default();
+    state.scroll.vertical = VerticalScroll {
+      source_line_index: 3,
+      y_inside_source_line: 12.0,
+    };
+    let scroll = state.scroll;
+
+    let change = state.try_apply_wheel_delta(iced::Vector::new(f32::NAN, 50.0));
+
+    assert_eq!(change, None);
+    assert_eq!(state.scroll, scroll);
   }
 }

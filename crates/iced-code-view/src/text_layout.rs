@@ -7,6 +7,7 @@ pub(crate) use projection::VisibleTextProjection;
 
 use iced::advanced::graphics::text::{self, cosmic_text};
 
+use crate::scroll::VerticalScroll;
 use crate::{TabDisplayPolicy, document::Document};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
@@ -79,6 +80,6 @@ impl TextLayoutKey {
 pub(crate) struct TextLayoutRequest<'a> {
   pub(crate) document: &'a Document,
   pub(crate) content_size: iced::Size,
-  pub(crate) scroll_offset: iced::Vector,
+  pub(crate) vertical_scroll: VerticalScroll,
   pub(crate) config: TextLayoutConfig,
 }

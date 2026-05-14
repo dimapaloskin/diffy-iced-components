@@ -2,7 +2,7 @@ use iced::advanced::graphics::text::{self, cosmic_text};
 
 use crate::cosmic_buffer::CosmicBufferPayload;
 use crate::font_lock;
-use crate::source_line::SourceLineHeights;
+use crate::scroll::VerticalScroll;
 use crate::text_layout::VisibleTextLayout;
 use crate::text_layout::VisibleTextProjection;
 use crate::text_layout::{TextLayoutKey, TextLayoutRequest};
@@ -52,6 +52,8 @@ pub(crate) fn rebuild_visible_layout(
   key: TextLayoutKey,
   prev: Option<VisibleTextLayout>,
 ) -> VisibleTextLayout {
+  debug_assert_finite_content_size(request.content_size);
+
   let mut font_system = font_lock::foreground_font_system_write();
   let raw_fs = font_system.raw();
 
@@ -68,14 +70,15 @@ pub(crate) fn rebuild_visible_layout(
     sync_buffer_text(buffer, &request);
   }
 
-  let projection = sync_buffer_scroll_and_projection(buffer, raw_fs, &request);
+  let (projection, prepared_vertical_scroll) =
+    sync_buffer_scroll_and_projection(buffer, raw_fs, &request);
 
   VisibleTextLayout {
     key,
     projection,
     payload,
-    prepared_content_height_bits: request.content_size.height.to_bits(),
-    prepared_document_scroll_y_bits: request.scroll_offset.y.to_bits(),
+    prepared_content_height: request.content_size.height,
+    prepared_vertical_scroll,
   }
 }
 
@@ -83,12 +86,13 @@ pub(crate) fn sync_visible_viewport(
   entry: &mut VisibleTextLayout,
   request: &TextLayoutRequest<'_>,
 ) {
-  let content_height_bits = request.content_size.height.to_bits();
-  let document_scroll_y_bits = request.scroll_offset.y.to_bits();
-  let height_changed = entry.prepared_content_height_bits != content_height_bits;
-  let scroll_changed = entry.prepared_document_scroll_y_bits != document_scroll_y_bits;
+  debug_assert_finite_content_size(request.content_size);
 
-  if !height_changed && !scroll_changed {
+  let content_height = request.content_size.height;
+  let height_changed = entry.prepared_content_height != content_height;
+  let vertical_scroll_changed = entry.prepared_vertical_scroll != request.vertical_scroll;
+
+  if !height_changed && !vertical_scroll_changed {
     return;
   }
 
@@ -101,13 +105,21 @@ pub(crate) fn sync_visible_viewport(
     sync_buffer_config(buffer, request, metrics_from_request(request));
   }
 
-  entry.projection = sync_buffer_scroll_and_projection(buffer, raw_fs, request);
-  entry.prepared_content_height_bits = content_height_bits;
-  entry.prepared_document_scroll_y_bits = document_scroll_y_bits;
+  let (projection, prepared_vertical_scroll) =
+    sync_buffer_scroll_and_projection(buffer, raw_fs, request);
+
+  entry.projection = projection;
+  entry.prepared_content_height = content_height;
+  entry.prepared_vertical_scroll = prepared_vertical_scroll;
 }
 
 fn metrics_from_request(request: &TextLayoutRequest<'_>) -> cosmic_text::Metrics {
   cosmic_text::Metrics::new(request.config.font_size, request.config.line_height)
+}
+
+fn debug_assert_finite_content_size(size: iced::Size) {
+  debug_assert!(size.width.is_finite());
+  debug_assert!(size.height.is_finite());
 }
 
 fn take_or_create_payload(
@@ -151,12 +163,15 @@ fn sync_buffer_scroll_and_projection(
   buffer: &mut cosmic_text::Buffer,
   font_system: &mut cosmic_text::FontSystem,
   request: &TextLayoutRequest<'_>,
-) -> VisibleTextProjection {
-  let source_line_heights = SourceLineHeights::for_request(request);
-  let source_offset = source_line_heights.resolve_document_y(request.scroll_offset.y);
-
-  buffer.set_scroll(source_offset.to_cosmic_scroll());
+) -> (VisibleTextProjection, VerticalScroll) {
+  buffer.set_scroll(request.vertical_scroll.to_cosmic());
   buffer.shape_until_scroll(font_system, false);
 
-  VisibleTextProjection::build(buffer, &source_line_heights, request.content_size)
+  let vertical_scroll = VerticalScroll::from_cosmic(buffer.scroll());
+  debug_assert!(vertical_scroll.y_inside_source_line.is_finite());
+
+  (
+    VisibleTextProjection::build(buffer, request.content_size),
+    vertical_scroll,
+  )
 }

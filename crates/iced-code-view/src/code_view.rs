@@ -14,8 +14,8 @@ use crate::document::Document;
 use crate::gutter::{GutterConfig, GutterMetricsRequest, GutterRenderArtifactRequest};
 use crate::insets::CodeViewInsets;
 use crate::measurement::{MeasurementRequest, MeasurementResult};
-use crate::scroll::ScrollExtent;
-use crate::state::CodeViewState;
+use crate::scroll::{ScrollExtent, ScrollState};
+use crate::state::{CodeViewState, ScrollChange};
 use crate::style::CodeViewStyle;
 use crate::text_layout::TextLayoutConfig;
 use crate::text_layout::TextLayoutRequest;
@@ -114,12 +114,10 @@ where
       .visible_layout()
       .is_some_and(|entry| entry.key.document_revision != self.inputs.document.revision());
 
-    // TODO: temporarily reset scroll offset if document changed.
-    // In feature consider ability to reset scroll offset to previous value when file re-opened.
-    let scroll_offset = if document_changed {
-      iced::Vector::ZERO
+    let mut scroll = if document_changed {
+      ScrollState::ZERO
     } else {
-      state.viewport.scroll_offset
+      state.scroll
     };
 
     let gutter_metrics = state.gutter.ensure_metrics(GutterMetricsRequest {
@@ -128,7 +126,7 @@ where
       gutter_config,
     });
 
-    let viewport = Viewport::new(resolved_size, insets, gutter_metrics, scroll_offset);
+    let viewport = Viewport::new(resolved_size, insets, gutter_metrics);
 
     let measurement_request = MeasurementRequest::new(
       document,
@@ -139,22 +137,16 @@ where
     let measurement_result =
       state.update_pending_measurement(measurement_request, measurement_result);
 
-    let scroll_extent = ScrollExtent::new(
-      document,
-      text_layout_config.wrap_mode,
-      text_layout_config.line_height,
-      measurement_result,
-    );
+    let scroll_extent = ScrollExtent::new(text_layout_config.wrap_mode, measurement_result);
 
-    let scroll_offset =
-      scroll_extent.clamp_offset(viewport.scroll_offset, viewport.scroll_viewport_size());
-
-    let viewport = viewport.with_scroll_offset(scroll_offset);
+    scroll.horizontal_px = scroll_extent
+      .horizontal
+      .clamp_offset(scroll.horizontal_px, viewport.scroll_viewport_size().width);
 
     let text_layout_request = TextLayoutRequest {
       document,
       content_size: viewport.text.content_bounds.size(),
-      scroll_offset: viewport.scroll_offset,
+      vertical_scroll: scroll.vertical,
       config: text_layout_config,
     };
 
@@ -164,6 +156,7 @@ where
       .unwrap_or(iced::Size::ZERO);
 
     let visible_text_layout = state.text_layout.ensure_visible_layout(text_layout_request);
+    scroll.vertical = visible_text_layout.prepared_vertical_scroll;
 
     let gutter_render_artifact_request = GutterRenderArtifactRequest {
       text_layout_config,
@@ -175,6 +168,7 @@ where
     state
       .gutter
       .ensure_render_artifact(gutter_render_artifact_request);
+    state.scroll = scroll;
     state.scroll_extent = scroll_extent;
     state.viewport = viewport;
 
@@ -219,7 +213,7 @@ where
       text_content_bounds.intersection(viewport),
     ) {
       let position = iced::Point::new(
-        text_content_bounds.x - state.viewport.scroll_offset.x,
+        text_content_bounds.x - state.scroll.horizontal_px,
         text_content_bounds.y,
       );
 
@@ -266,9 +260,15 @@ impl<'a, Message> CodeView<'a, Message> {
     let delta = self.scroll_delta_to_pixels(delta);
     let state = tree.state.downcast_mut::<CodeViewState>();
 
-    if state.try_apply_wheel_delta(delta) {
-      shell.invalidate_layout();
-      shell.request_redraw();
+    match state.try_apply_wheel_delta(delta) {
+      Some(ScrollChange::RedrawOnly) => {
+        shell.request_redraw();
+      }
+      Some(ScrollChange::RequiresLayout) => {
+        shell.invalidate_layout();
+        shell.request_redraw();
+      }
+      None => {}
     }
   }
 

@@ -231,7 +231,6 @@ mod tests {
             source_line_index,
             wrap_row_index,
             y_inside_source_line: wrap_row_index as f32 * 24.0,
-            document_y: source_line_index as f32 * 24.0 + wrap_row_index as f32 * 24.0,
             viewport_y,
             height: 24.0,
             width: 80.0,

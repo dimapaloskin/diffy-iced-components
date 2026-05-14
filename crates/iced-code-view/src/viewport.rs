@@ -20,7 +20,6 @@ impl ViewportArea {
 pub(crate) struct Viewport {
   pub(crate) gutter: Option<ViewportArea>,
   pub(crate) text: ViewportArea,
-  pub(crate) scroll_offset: iced::Vector,
 }
 
 impl Viewport {
@@ -28,7 +27,6 @@ impl Viewport {
     widget_size: iced::Size,
     insets: CodeViewInsets,
     gutter: GutterMetrics,
-    scroll_offset: iced::Vector,
   ) -> Self {
     let surface_width = widget_size.width.max(0.0);
     let surface_height = widget_size.height.max(0.0);
@@ -83,7 +81,6 @@ impl Viewport {
         bounds: text_bounds,
         content_bounds: text_content_bounds,
       },
-      scroll_offset,
     }
   }
 
@@ -100,11 +97,6 @@ impl Viewport {
 
   pub(crate) fn scroll_viewport_size(&self) -> iced::Size {
     self.text.content_bounds.size()
-  }
-
-  pub(crate) fn with_scroll_offset(mut self, scroll_offset: iced::Vector) -> Self {
-    self.scroll_offset = scroll_offset;
-    self
   }
 }
 
@@ -140,7 +132,6 @@ mod tests {
         HorizontalInsets::new(13.0, 7.0),
       ),
       gutter_metrics(),
-      iced::Vector::new(3.0, 4.0),
     );
 
     assert_eq!(
@@ -183,7 +174,6 @@ mod tests {
       viewport.scroll_viewport_size(),
       iced::Size::new(140.0, 84.0)
     );
-    assert_eq!(viewport.scroll_offset, iced::Vector::new(3.0, 4.0));
   }
 
   #[test]
@@ -198,7 +188,6 @@ mod tests {
         requested_width: 100.0,
         ..gutter_metrics()
       },
-      iced::Vector::ZERO,
     );
 
     assert_eq!(

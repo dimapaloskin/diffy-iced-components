@@ -10,7 +10,6 @@ mod line_index;
 mod measurement;
 mod policies;
 mod scroll;
-mod source_line;
 mod state;
 mod style;
 mod text_layout;
