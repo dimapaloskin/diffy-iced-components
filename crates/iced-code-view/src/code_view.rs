@@ -14,11 +14,10 @@ use crate::document::Document;
 use crate::gutter::{GutterConfig, GutterMetricsRequest, GutterRenderArtifactRequest};
 use crate::insets::CodeViewInsets;
 use crate::measurement::{MeasurementRequest, MeasurementResult};
-use crate::scroll::{ScrollExtent, ScrollState};
-use crate::state::{CodeViewState, ScrollChange};
+use crate::scroll::{GeometryInputs, ScrollChange};
+use crate::state::CodeViewState;
 use crate::style::CodeViewStyle;
-use crate::text_layout::TextLayoutConfig;
-use crate::text_layout::TextLayoutRequest;
+use crate::text_layout::{TextLayoutConfig, TextLayoutRequest};
 use crate::viewport::Viewport;
 
 pub(crate) struct CodeView<'a, Message> {
@@ -109,22 +108,15 @@ where
 
     let state = tree.state.downcast_mut::<CodeViewState>();
     let resolved_size = limits.resolve(width, height, iced::Size::ZERO);
-    let document_changed = state
-      .text_layout
-      .visible_layout()
-      .is_some_and(|entry| entry.key.document_revision != self.inputs.document.revision());
-
-    let mut scroll = if document_changed {
-      ScrollState::ZERO
-    } else {
-      state.scroll
-    };
-
     let gutter_metrics = state.gutter.ensure_metrics(GutterMetricsRequest {
       document,
       text_layout_config,
       gutter_config,
     });
+    let document_changed = state
+      .text_layout
+      .visible_layout()
+      .is_some_and(|entry| entry.key.document_revision != self.inputs.document.revision());
 
     let viewport = Viewport::new(resolved_size, insets, gutter_metrics);
 
@@ -133,20 +125,37 @@ where
       text_layout_config,
       viewport.text.content_bounds.size().width,
     );
+    let measurement_key = measurement_request.key;
 
     let measurement_result =
       state.update_pending_measurement(measurement_request, measurement_result);
 
-    let scroll_extent = ScrollExtent::new(text_layout_config.wrap_mode, measurement_result);
+    let geometry_inputs = GeometryInputs {
+      source_line_count: document.line_count(),
+      mode: text_layout_config.wrap_mode,
+      line_height: text_layout_config.line_height,
+      measurement_key,
+    };
 
-    scroll.horizontal_px = scroll_extent
-      .horizontal
-      .clamp_offset(scroll.horizontal_px, viewport.scroll_viewport_size().width);
+    let scroll_viewport_size = viewport.scroll_viewport_size();
+    if document_changed {
+      state.scroll.reset(geometry_inputs);
+    } else {
+      state
+        .scroll
+        .reconcile(geometry_inputs, scroll_viewport_size);
+    }
+
+    if let Some(result) = measurement_result {
+      state
+        .scroll
+        .apply_measurement_result(result, scroll_viewport_size);
+    }
 
     let text_layout_request = TextLayoutRequest {
       document,
       content_size: viewport.text.content_bounds.size(),
-      vertical_scroll: scroll.vertical,
+      vertical_scroll: state.scroll.vertical(),
       config: text_layout_config,
     };
 
@@ -156,7 +165,9 @@ where
       .unwrap_or(iced::Size::ZERO);
 
     let visible_text_layout = state.text_layout.ensure_visible_layout(text_layout_request);
-    scroll.vertical = visible_text_layout.prepared_vertical_scroll;
+    state
+      .scroll
+      .sync_from_cosmic(visible_text_layout.cosmic_scroll);
 
     let gutter_render_artifact_request = GutterRenderArtifactRequest {
       text_layout_config,
@@ -168,8 +179,7 @@ where
     state
       .gutter
       .ensure_render_artifact(gutter_render_artifact_request);
-    state.scroll = scroll;
-    state.scroll_extent = scroll_extent;
+
     state.viewport = viewport;
 
     layout::Node::new(resolved_size)
@@ -213,7 +223,7 @@ where
       text_content_bounds.intersection(viewport),
     ) {
       let position = iced::Point::new(
-        text_content_bounds.x - state.scroll.horizontal_px,
+        text_content_bounds.x - state.scroll.horizontal_px(),
         text_content_bounds.y,
       );
 
@@ -254,13 +264,14 @@ impl<'a, Message> CodeView<'a, Message> {
     }
 
     // Stop wheel events at CodeView, so scrolling does not chain to a parent at edges.
-    // For web-like scroll chaining, capture only when `try_apply_wheel_delta` returns true.
+    // For web-like scroll chaining, capture only when `apply_wheel_delta` returns `Some(_)`.
     shell.capture_event();
 
     let delta = self.scroll_delta_to_pixels(delta);
     let state = tree.state.downcast_mut::<CodeViewState>();
+    let scroll_viewport = state.viewport.scroll_viewport_size();
 
-    match state.try_apply_wheel_delta(delta) {
+    match state.scroll.apply_wheel_delta(delta, scroll_viewport) {
       Some(ScrollChange::RedrawOnly) => {
         shell.request_redraw();
       }

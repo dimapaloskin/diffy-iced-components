@@ -2,7 +2,6 @@ use iced::advanced::graphics::text::{self, cosmic_text};
 
 use crate::cosmic_buffer::CosmicBufferPayload;
 use crate::font_lock;
-use crate::scroll::VerticalScroll;
 use crate::text_layout::VisibleTextLayout;
 use crate::text_layout::VisibleTextProjection;
 use crate::text_layout::{TextLayoutKey, TextLayoutRequest};
@@ -70,15 +69,14 @@ pub(crate) fn rebuild_visible_layout(
     sync_buffer_text(buffer, &request);
   }
 
-  let (projection, prepared_vertical_scroll) =
-    sync_buffer_scroll_and_projection(buffer, raw_fs, &request);
+  let (projection, cosmic_scroll) = sync_buffer_scroll_and_projection(buffer, raw_fs, &request);
 
   VisibleTextLayout {
     key,
     projection,
     payload,
     prepared_content_height: request.content_size.height,
-    prepared_vertical_scroll,
+    cosmic_scroll,
   }
 }
 
@@ -90,7 +88,7 @@ pub(crate) fn sync_visible_viewport(
 
   let content_height = request.content_size.height;
   let height_changed = entry.prepared_content_height != content_height;
-  let vertical_scroll_changed = entry.prepared_vertical_scroll != request.vertical_scroll;
+  let vertical_scroll_changed = entry.vertical_scroll() != request.vertical_scroll;
 
   if !height_changed && !vertical_scroll_changed {
     return;
@@ -105,12 +103,11 @@ pub(crate) fn sync_visible_viewport(
     sync_buffer_config(buffer, request, metrics_from_request(request));
   }
 
-  let (projection, prepared_vertical_scroll) =
-    sync_buffer_scroll_and_projection(buffer, raw_fs, request);
+  let (projection, cosmic_scroll) = sync_buffer_scroll_and_projection(buffer, raw_fs, request);
 
   entry.projection = projection;
   entry.prepared_content_height = content_height;
-  entry.prepared_vertical_scroll = prepared_vertical_scroll;
+  entry.cosmic_scroll = cosmic_scroll;
 }
 
 fn metrics_from_request(request: &TextLayoutRequest<'_>) -> cosmic_text::Metrics {
@@ -163,15 +160,12 @@ fn sync_buffer_scroll_and_projection(
   buffer: &mut cosmic_text::Buffer,
   font_system: &mut cosmic_text::FontSystem,
   request: &TextLayoutRequest<'_>,
-) -> (VisibleTextProjection, VerticalScroll) {
+) -> (VisibleTextProjection, cosmic_text::Scroll) {
   buffer.set_scroll(request.vertical_scroll.to_cosmic());
   buffer.shape_until_scroll(font_system, false);
 
-  let vertical_scroll = VerticalScroll::from_cosmic(buffer.scroll());
-  debug_assert!(vertical_scroll.y_inside_source_line.is_finite());
-
   (
     VisibleTextProjection::build(buffer, request.content_size),
-    vertical_scroll,
+    buffer.scroll(),
   )
 }

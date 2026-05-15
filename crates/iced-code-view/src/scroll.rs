@@ -1,7 +1,12 @@
+mod geometry;
+mod vertical_scroll;
+
 use iced::advanced::graphics::text::cosmic_text;
 
-use crate::WrapMode;
-use crate::measurement::{MeasurementOutput, MeasurementResult};
+pub(crate) use geometry::{GeometryInputs, ScrollGeometry};
+pub(crate) use vertical_scroll::VerticalScroll;
+
+use crate::measurement::MeasurementResult;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct ScrollState {
@@ -28,172 +33,162 @@ impl Default for ScrollState {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub(crate) struct VerticalScroll {
-  pub(crate) source_line_index: usize,
-  pub(crate) y_inside_source_line: f32,
+pub(crate) enum ScrollChange {
+  RedrawOnly,
+  RequiresLayout,
 }
 
-impl VerticalScroll {
-  pub(crate) const ZERO: Self = Self {
-    source_line_index: 0,
-    y_inside_source_line: 0.0,
-  };
+pub(crate) struct ScrollModel {
+  state: ScrollState,
+  geometry: ScrollGeometry,
+}
 
-  pub(crate) fn to_cosmic(self) -> cosmic_text::Scroll {
-    // Horizontal scroll is applied at draw time, not via cosmic Scroll
-    cosmic_text::Scroll::new(self.source_line_index, self.y_inside_source_line, 0.0)
+impl ScrollModel {
+  pub(crate) fn vertical(&self) -> VerticalScroll {
+    self.state.vertical
   }
 
-  pub(crate) fn from_cosmic(scroll: cosmic_text::Scroll) -> Self {
-    Self {
-      source_line_index: scroll.line,
-      y_inside_source_line: scroll.vertical,
+  pub(crate) fn horizontal_px(&self) -> f32 {
+    self.state.horizontal_px
+  }
+
+  pub(crate) fn reset(&mut self, inputs: GeometryInputs) {
+    self.state = ScrollState::ZERO;
+    self.geometry = ScrollGeometry::default();
+    self.geometry.reconcile(&inputs);
+  }
+
+  pub(crate) fn reconcile(&mut self, inputs: GeometryInputs, viewport_size: iced::Size) {
+    self.geometry.reconcile(&inputs);
+    self.clamp_horizontal(viewport_size);
+  }
+
+  pub(crate) fn apply_measurement_result(
+    &mut self,
+    result: &MeasurementResult,
+    viewport_size: iced::Size,
+  ) {
+    self.geometry.apply_measurement_result(result);
+    self.clamp_horizontal(viewport_size);
+  }
+
+  fn clamp_horizontal(&mut self, viewport_size: iced::Size) {
+    self.state.horizontal_px = self
+      .geometry
+      .horizontal
+      .clamp_offset(self.state.horizontal_px, viewport_size.width);
+  }
+
+  // We pass requested scroll into cosmic-text before layout.
+  // `shape_until_scroll(...)` may normalize it, so here we sync normalized scroll back after layout.
+  pub(crate) fn sync_from_cosmic(&mut self, cosmic_scroll: cosmic_text::Scroll) {
+    debug_assert_eq!(cosmic_scroll.horizontal, 0.0);
+    debug_assert!(cosmic_scroll.vertical.is_finite());
+
+    self.state.vertical = VerticalScroll::from_cosmic(cosmic_scroll);
+  }
+
+  pub(crate) fn apply_wheel_delta(
+    &mut self,
+    delta: iced::Vector,
+    scroll_viewport: iced::Size,
+  ) -> Option<ScrollChange> {
+    if !delta.x.is_finite() || !delta.y.is_finite() {
+      return None;
     }
-  }
 
-  pub(crate) fn scrolled_by(self, delta_y: f32) -> Self {
-    let y_inside_source_line = self.y_inside_source_line + delta_y;
-    // Prevent a no-op wheel at the document top from forcing a relayout.
-    let y_inside_source_line = if self.source_line_index == 0 {
-      y_inside_source_line.max(0.0)
-    } else {
-      y_inside_source_line
-    };
+    let horizontal_px = self
+      .geometry
+      .horizontal
+      .clamp_offset(self.state.horizontal_px - delta.x, scroll_viewport.width);
 
-    Self {
-      y_inside_source_line,
-      ..self
-    }
-  }
-}
+    // iced wheel delta is positive when scrolling up.
+    // cosmic Scroll is positive when scrolled down.
+    let vertical_scroll = self.state.vertical.scrolled_by(-delta.y);
 
-impl Default for VerticalScroll {
-  fn default() -> Self {
-    Self::ZERO
-  }
-}
+    let vertical_changed = vertical_scroll != self.state.vertical;
+    let horizontal_changed = horizontal_px != self.state.horizontal_px;
 
-#[derive(Debug, Default, Clone, Copy, PartialEq)]
-pub(crate) struct ScrollExtent {
-  pub(crate) horizontal: HorizontalExtent,
-}
-
-impl ScrollExtent {
-  pub(crate) fn new(wrap_mode: WrapMode, measurement_result: Option<&MeasurementResult>) -> Self {
-    match wrap_mode {
-      WrapMode::NoWrap => Self {
-        horizontal: no_wrap_horizontal_extent(measurement_result),
-      },
-      WrapMode::SoftWrap => Self {
-        horizontal: HorizontalExtent::NotScrollable,
-      },
-    }
-  }
-}
-
-#[derive(Debug, Default, Clone, Copy, PartialEq)]
-pub(crate) enum HorizontalExtent {
-  #[default]
-  Unknown,
-  NotScrollable,
-  Exact {
-    content: f32,
-  },
-}
-
-impl HorizontalExtent {
-  pub(crate) fn clamp_offset(&self, offset: f32, viewport: f32) -> f32 {
-    match self {
-      HorizontalExtent::Unknown => offset.max(0.0),
-      HorizontalExtent::NotScrollable => 0.0,
-      HorizontalExtent::Exact { content } => {
-        let max = (*content - viewport).max(0.0);
-        offset.clamp(0.0, max)
+    match (vertical_changed, horizontal_changed) {
+      (false, false) => None,
+      (false, true) => {
+        self.state.horizontal_px = horizontal_px;
+        Some(ScrollChange::RedrawOnly)
+      }
+      (true, _) => {
+        self.state.vertical = vertical_scroll;
+        self.state.horizontal_px = horizontal_px;
+        Some(ScrollChange::RequiresLayout)
       }
     }
   }
 }
 
-fn no_wrap_horizontal_extent(measurement_result: Option<&MeasurementResult>) -> HorizontalExtent {
-  match measurement_result.map(|result| result.output) {
-    Some(MeasurementOutput::NoWrapHorizontalExtent { content_width }) => HorizontalExtent::Exact {
-      content: content_width,
-    },
-    None => HorizontalExtent::Unknown,
+impl Default for ScrollModel {
+  fn default() -> Self {
+    Self {
+      state: ScrollState::ZERO,
+      geometry: ScrollGeometry::default(),
+    }
   }
 }
 
 #[cfg(test)]
 mod tests {
+  use crate::measurement::MeasurementKey;
+  use crate::text_layout::WrapMode;
+
   use super::*;
 
-  #[test]
-  fn unknown_horizontal_extent_clamps_only_to_zero() {
-    let extent = HorizontalExtent::Unknown;
+  pub(crate) fn test_inputs(mode: WrapMode) -> GeometryInputs {
+    GeometryInputs {
+      source_line_count: 0,
+      mode,
+      line_height: 18.0,
+      measurement_key: test_measurement_key(),
+    }
+  }
 
-    assert_eq!(extent.clamp_offset(-10.0, 300.0), 0.0);
-    assert_eq!(extent.clamp_offset(50.0, 300.0), 50.0);
+  pub(crate) fn test_measurement_key() -> MeasurementKey {
+    use crate::measurement::MeasurementKind;
+    use crate::policies::TabDisplayPolicy;
+    use iced::advanced::graphics::text::Version;
+
+    MeasurementKey {
+      document_revision: 0,
+      kind: MeasurementKind::NoWrapHorizontalExtent,
+      font: iced::Font::DEFAULT,
+      font_size_bits: 14.0_f32.to_bits(),
+      line_height_bits: 18.0_f32.to_bits(),
+      tab_policy: TabDisplayPolicy::default(),
+      font_system_version: Version::default(),
+    }
   }
 
   #[test]
-  fn not_scrollable_horizontal_extent_always_clamps_to_zero() {
-    let extent = HorizontalExtent::NotScrollable;
+  fn wheel_up_at_document_top_is_noop() {
+    let mut scroll = ScrollModel::default();
+    scroll.reset(test_inputs(WrapMode::NoWrap));
 
-    assert_eq!(extent.clamp_offset(-10.0, 300.0), 0.0);
-    assert_eq!(extent.clamp_offset(50.0, 300.0), 0.0);
+    let change =
+      scroll.apply_wheel_delta(iced::Vector::new(0.0, 50.0), iced::Size::new(300.0, 100.0));
+
+    assert_eq!(change, None);
+    assert_eq!(scroll.vertical(), VerticalScroll::ZERO);
   }
 
   #[test]
-  fn exact_horizontal_extent_clamps_to_scrollable_range() {
-    let extent = HorizontalExtent::Exact { content: 1000.0 };
+  fn non_finite_wheel_delta_is_ignored() {
+    let mut scroll = ScrollModel::default();
+    scroll.reset(test_inputs(WrapMode::NoWrap));
 
-    assert_eq!(extent.clamp_offset(-10.0, 300.0), 0.0);
-    assert_eq!(extent.clamp_offset(50.0, 300.0), 50.0);
-    assert_eq!(extent.clamp_offset(900.0, 300.0), 700.0);
-    assert_eq!(
-      HorizontalExtent::Exact { content: 200.0 }.clamp_offset(50.0, 300.0),
-      0.0
+    let change = scroll.apply_wheel_delta(
+      iced::Vector::new(f32::NAN, 50.0),
+      iced::Size::new(300.0, 100.0),
     );
-  }
 
-  #[test]
-  fn no_wrap_horizontal_extent_is_unknown_without_measurement() {
-    assert_eq!(
-      ScrollExtent::new(WrapMode::NoWrap, None).horizontal,
-      HorizontalExtent::Unknown
-    );
-  }
-
-  #[test]
-  fn soft_wrap_horizontal_extent_is_not_scrollable() {
-    assert_eq!(
-      ScrollExtent::new(WrapMode::SoftWrap, None),
-      ScrollExtent {
-        horizontal: HorizontalExtent::NotScrollable,
-      }
-    );
-  }
-
-  #[test]
-  fn vertical_scroll_at_top_does_not_go_negative() {
-    assert_eq!(
-      VerticalScroll::ZERO.scrolled_by(-50.0),
-      VerticalScroll::ZERO
-    );
-  }
-
-  #[test]
-  fn vertical_scroll_inside_document_can_go_negative() {
-    assert_eq!(
-      VerticalScroll {
-        source_line_index: 5,
-        y_inside_source_line: 10.0,
-      }
-      .scrolled_by(-30.0),
-      VerticalScroll {
-        source_line_index: 5,
-        y_inside_source_line: -20.0,
-      }
-    );
+    assert_eq!(change, None);
+    assert_eq!(scroll.vertical(), VerticalScroll::ZERO);
+    assert_eq!(scroll.horizontal_px(), 0.0);
   }
 }
