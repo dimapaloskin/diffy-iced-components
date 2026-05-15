@@ -3,7 +3,7 @@ use iced::{Element, Length, Task, alignment};
 
 use iced_code_view::{
   CodeViewController, CodeViewInsets, CodeViewMessage, CodeViewStyle, Document, GutterConfig,
-  GutterInsets,
+  GutterInsets, WrapMode,
 };
 
 const FILES: &[(&str, &str)] = &[
@@ -27,6 +27,7 @@ enum AppMessage {
   CodeView(CodeViewMessage),
   SelectFile(usize),
   ToggleLineNumbers,
+  ToggleWrapMode,
 }
 
 struct App {
@@ -54,9 +55,10 @@ impl App {
 
     let code_view = CodeViewController::new(Document::new(read_demo_file(0)))
       .with_border_radius(iced::border::radius(12.0))
-      .with_font_size(15.0)
+      .with_font_size(13.0)
       .with_gutter_config(gutter_config)
       .with_style(style)
+      .with_wrap_mode(iced_code_view::WrapMode::SoftWrap)
       .with_insets(CodeViewInsets::new(0.0, 8.0));
 
     (
@@ -84,6 +86,15 @@ impl App {
         self.code_view.set_gutter_config(gutter_config);
         Task::none()
       }
+      AppMessage::ToggleWrapMode => {
+        let wrap_mode = match self.code_view.wrap_mode() {
+          WrapMode::NoWrap => WrapMode::SoftWrap,
+          WrapMode::SoftWrap => WrapMode::NoWrap,
+        };
+
+        self.code_view.set_wrap_mode(wrap_mode);
+        Task::none()
+      }
     }
   }
 
@@ -101,7 +112,14 @@ impl App {
       "line numbers: off"
     };
 
+    let wrap_label = match self.code_view.wrap_mode() {
+      WrapMode::NoWrap => "wrap: off",
+      WrapMode::SoftWrap => "wrap:  on",
+    };
+
     let gutter_button = button(gutter_label).on_press(AppMessage::ToggleLineNumbers);
+    let wrap_mode_button = button(wrap_label).on_press(AppMessage::ToggleWrapMode);
+    let settings_row = row![gutter_button, wrap_mode_button].spacing(8);
 
     let status = format!(
       "file: {}, lines: {}",
@@ -112,7 +130,7 @@ impl App {
     container(
       column![
         text(status).font(iced::Font::MONOSPACE),
-        row![file_buttons, space::horizontal(), gutter_button],
+        row![file_buttons, space::horizontal(), settings_row],
         self.code_view.view().map(AppMessage::CodeView),
       ]
       .spacing(10.0),

@@ -1,7 +1,5 @@
 pub(crate) mod engine;
 
-use std::ops::RangeInclusive;
-
 use iced::advanced::graphics::text;
 
 use crate::cosmic_buffer::CosmicBufferPayload;
@@ -164,28 +162,40 @@ impl GutterRenderArtifactKey {
   }
 }
 
-// NoWrap can use compact ranges.
-// SoftWrap will need a sequence/hash signature of visible row identities.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct VisibleRowKey {
+  pub(crate) source_line_index: usize,
+  pub(crate) wrap_row_index: usize,
+}
+
+// This signature is part of the gutter render cache key.
+//
+// SoftWrap can change the blank/number sequence even when the visible line
+// range is the same, so range and count are not enough for the key.
+//
+// This allocates a Vec on every layout pass. Should be fine for now because
+// the size is limited by viewport. Revisit if profiling shows this is hot.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct GutterRowsSignature {
-  pub(crate) source_lines: RangeInclusive<usize>,
-  pub(crate) wrap_rows: RangeInclusive<usize>,
-  pub(crate) row_count: usize,
+  rows: Vec<VisibleRowKey>,
 }
 
 impl GutterRowsSignature {
   pub(crate) fn from_projection(projection: &VisibleTextProjection) -> Option<Self> {
-    let first = projection.visible_rows.first()?;
-    let last = projection
-      .visible_rows
-      .last()
-      .expect("first visible row exists");
+    if projection.visible_rows.is_empty() {
+      return None;
+    }
 
-    Some(Self {
-      source_lines: first.source_line_index..=last.source_line_index,
-      wrap_rows: first.wrap_row_index..=last.wrap_row_index,
-      row_count: projection.visible_rows.len(),
-    })
+    let rows = projection
+      .visible_rows
+      .iter()
+      .map(|row| VisibleRowKey {
+        source_line_index: row.source_line_index,
+        wrap_row_index: row.wrap_row_index,
+      })
+      .collect();
+
+    Some(Self { rows })
   }
 }
 
@@ -292,14 +302,32 @@ mod tests {
   }
 
   #[test]
-  fn gutter_rows_signature_uses_visible_no_wrap_range_and_count() {
-    let projection = projection(&[(10, 0, 0.0), (11, 0, 24.0), (12, 0, 48.0)]);
+  fn gutter_rows_signature_uses_exact_visible_row_sequence() {
+    let projection = projection(&[(10, 0, 0.0), (10, 1, 24.0), (11, 0, 48.0), (12, 0, 72.0)]);
 
     let signature = GutterRowsSignature::from_projection(&projection).expect("visible rows exist");
 
-    assert_eq!(signature.source_lines, 10..=12);
-    assert_eq!(signature.wrap_rows, 0..=0);
-    assert_eq!(signature.row_count, 3);
+    assert_eq!(
+      signature.rows,
+      vec![
+        VisibleRowKey {
+          source_line_index: 10,
+          wrap_row_index: 0,
+        },
+        VisibleRowKey {
+          source_line_index: 10,
+          wrap_row_index: 1,
+        },
+        VisibleRowKey {
+          source_line_index: 11,
+          wrap_row_index: 0
+        },
+        VisibleRowKey {
+          source_line_index: 12,
+          wrap_row_index: 0,
+        },
+      ]
+    );
   }
 
   #[test]
@@ -328,6 +356,37 @@ mod tests {
     };
 
     assert_eq!(
+      GutterRenderArtifactKey::for_request(&request_a, metrics_key),
+      GutterRenderArtifactKey::for_request(&request_b, metrics_key)
+    );
+  }
+
+  #[test]
+  fn gutter_render_key_tracks_visible_row_sequence() {
+    let document = Document::new("one\ntwo\nthree");
+    let text_layout_config = TextLayoutConfig::default();
+    let gutter_config = GutterConfig::default();
+    let metrics = GutterMetrics::line_numbers(24.0, &gutter_config);
+    let metrics_key = metrics_key_for(&document, text_layout_config, gutter_config);
+
+    let projection_a = projection(&[(10, 0, 0.0), (10, 1, 24.0), (11, 0, 48.0), (12, 0, 72.0)]);
+    let projection_b = projection(&[(10, 0, 0.0), (11, 0, 24.0), (11, 1, 48.0), (12, 0, 72.0)]);
+
+    let request_a = GutterRenderArtifactRequest {
+      text_layout_config,
+      metrics,
+      gutter_size: iced::Size::new(metrics.requested_width, 96.0),
+      projection: &projection_a,
+    };
+
+    let request_b = GutterRenderArtifactRequest {
+      text_layout_config,
+      metrics,
+      gutter_size: iced::Size::new(metrics.requested_width, 96.0),
+      projection: &projection_b,
+    };
+
+    assert_ne!(
       GutterRenderArtifactKey::for_request(&request_a, metrics_key),
       GutterRenderArtifactKey::for_request(&request_b, metrics_key)
     );

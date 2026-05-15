@@ -21,7 +21,7 @@ impl WrapMode {
   pub(crate) fn to_cosmic(self) -> cosmic_text::Wrap {
     match self {
       WrapMode::NoWrap => cosmic_text::Wrap::None,
-      WrapMode::SoftWrap => unimplemented!("SoftWrap is not supported yet"),
+      WrapMode::SoftWrap => cosmic_text::Wrap::WordOrGlyph,
     }
   }
 }
