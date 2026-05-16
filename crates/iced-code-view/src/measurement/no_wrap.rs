@@ -1,10 +1,10 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 
-use iced::advanced::graphics::text::{self, cosmic_text};
+use iced::advanced::graphics::text::cosmic_text;
 
+use super::buffer::{BufferKind, build_buffer};
 use crate::font_lock;
-use crate::text_layout::TextLayoutConfig;
 
 use super::MeasurementRequest;
 use super::MeasurementResult;
@@ -23,8 +23,9 @@ pub(super) fn measure_horizontal_extent(
     key,
     document,
     text_layout_config,
+    ..
   } = request;
-  let mut buffer = build_buffer(text_layout_config, document.text());
+  let mut buffer = build_buffer(text_layout_config, document.text(), BufferKind::NoWrap);
 
   let mut max_width: f32 = 0.0;
   let mut next_line = 0;
@@ -45,24 +46,6 @@ pub(super) fn measure_horizontal_extent(
   }
 
   Some(MeasurementResult::no_wrap_horizontal_extent(key, max_width))
-}
-
-fn build_buffer(text_layout_config: TextLayoutConfig, text: &str) -> cosmic_text::Buffer {
-  let metrics =
-    cosmic_text::Metrics::new(text_layout_config.font_size, text_layout_config.line_height);
-  let attrs = text::to_attributes(text_layout_config.font);
-  let mut buffer = cosmic_text::Buffer::new_empty(metrics);
-
-  buffer.set_wrap(cosmic_text::Wrap::None);
-  buffer.set_tab_width(
-    text_layout_config
-      .tab_display_policy
-      .spaces_per_tab()
-      .into(),
-  );
-  buffer.set_text(text, &attrs, cosmic_text::Shaping::Advanced, None);
-
-  buffer
 }
 
 fn measure_chunk(

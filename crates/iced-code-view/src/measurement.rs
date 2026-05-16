@@ -1,5 +1,8 @@
+mod buffer;
 mod no_wrap;
+mod soft_wrap;
 
+use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
 use iced::advanced::graphics::text;
@@ -16,17 +19,20 @@ pub(crate) enum MeasurementKind {
 }
 
 impl MeasurementKind {
-  pub(crate) fn new(wrap_mode: WrapMode, resolved_content_width: f32) -> Self {
+  pub(crate) fn new(wrap_mode: WrapMode, text_content_width: f32) -> Self {
     match wrap_mode {
       WrapMode::NoWrap => MeasurementKind::NoWrapHorizontalExtent,
       WrapMode::SoftWrap => MeasurementKind::SoftWrapLineHeights {
-        content_width_bits: content_width_bits(resolved_content_width),
+        content_width_bits: content_width_bits(text_content_width),
       },
     }
   }
 
   pub(crate) fn needs_background_worker(self) -> bool {
-    matches!(self, MeasurementKind::NoWrapHorizontalExtent)
+    matches!(
+      self,
+      MeasurementKind::NoWrapHorizontalExtent | MeasurementKind::SoftWrapLineHeights { .. }
+    )
   }
 }
 
@@ -35,15 +41,17 @@ pub(crate) struct MeasurementRequest {
   pub(crate) key: MeasurementKey,
   pub(crate) document: Document,
   pub(crate) text_layout_config: TextLayoutConfig,
+  pub(crate) text_content_width: f32,
 }
 
 impl MeasurementRequest {
   pub(crate) fn new(
     document: &Document,
     text_layout_config: TextLayoutConfig,
-    resolved_content_width: f32,
+    text_content_width: f32,
   ) -> Self {
-    let kind = MeasurementKind::new(text_layout_config.wrap_mode, resolved_content_width);
+    let text_content_width = sanitize_extent(text_content_width);
+    let kind = MeasurementKind::new(text_layout_config.wrap_mode, text_content_width);
     let key = MeasurementKey::new(
       document.revision(),
       text_layout_config,
@@ -55,6 +63,7 @@ impl MeasurementRequest {
       key,
       document: document.clone(),
       text_layout_config,
+      text_content_width,
     }
   }
 }
@@ -89,9 +98,10 @@ impl MeasurementKey {
   }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) enum MeasurementOutput {
   NoWrapHorizontalExtent { content_width: f32 },
+  SoftWrapLineHeights { wrap_row_counts: Arc<[usize]> },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -109,6 +119,13 @@ impl MeasurementResult {
       },
     }
   }
+
+  pub(crate) fn soft_wrap_line_heights(key: MeasurementKey, wrap_row_counts: Arc<[usize]>) -> Self {
+    Self {
+      key,
+      output: MeasurementOutput::SoftWrapLineHeights { wrap_row_counts },
+    }
+  }
 }
 
 pub(crate) fn measure_document(
@@ -117,7 +134,7 @@ pub(crate) fn measure_document(
 ) -> Option<MeasurementResult> {
   match request.key.kind {
     MeasurementKind::NoWrapHorizontalExtent => no_wrap::measure_horizontal_extent(request, cancel),
-    MeasurementKind::SoftWrapLineHeights { .. } => None,
+    MeasurementKind::SoftWrapLineHeights { .. } => soft_wrap::measure_line_heights(request, cancel),
   }
 }
 

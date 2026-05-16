@@ -56,6 +56,7 @@ impl App {
     let code_view = CodeViewController::new(Document::new(read_demo_file(0)))
       .with_border_radius(iced::border::radius(12.0))
       .with_font_size(13.0)
+      .with_line_height(20.0)
       .with_gutter_config(gutter_config)
       .with_style(style)
       .with_wrap_mode(iced_code_view::WrapMode::SoftWrap)
