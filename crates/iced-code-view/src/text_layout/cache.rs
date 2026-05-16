@@ -1,7 +1,8 @@
+use iced::advanced::graphics::text::cosmic_text;
+
 use crate::cosmic_buffer::CosmicBufferPayload;
 use crate::scroll::VerticalScroll;
 use crate::text_layout::{TextLayoutKey, VisibleTextProjection};
-use iced::advanced::graphics::text::cosmic_text;
 
 pub(crate) struct VisibleTextLayout {
   pub(crate) key: TextLayoutKey,
