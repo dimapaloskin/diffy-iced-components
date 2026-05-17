@@ -358,6 +358,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "diffy-iced-runtime"
+version = "0.1.0"
+dependencies = [
+ "iced",
+ "tokio",
+]
+
+[[package]]
 name = "dispatch"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -795,6 +803,7 @@ name = "iced-code-view"
 version = "0.1.0"
 dependencies = [
  "cosmic-text",
+ "diffy-iced-runtime",
  "iced",
  "memchr",
 ]

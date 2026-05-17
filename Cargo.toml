@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/demo-app", "crates/iced-code-view"]
+members = ["crates/demo-app", "crates/iced-code-view", "crates/runtime"]
 
 [workspace.package]
 version = "0.1.0"
@@ -13,6 +13,7 @@ iced = { git = "https://github.com/iced-rs/iced", rev = "cf09909263c0b5a0ef43bbf
   "canvas",
   "tokio",
 ] }
+diffy-iced-runtime = { path = "crates/runtime" }
 
 [profile.release]
 opt-level = 3

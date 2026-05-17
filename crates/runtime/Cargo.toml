@@ -1,0 +1,9 @@
+[package]
+name = "diffy-iced-runtime"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+iced.workspace = true
+tokio = { version = "1", features = ["time"] }

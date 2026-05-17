@@ -1,14 +1,19 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::time::Duration;
 
 use iced::{Element, Length, Task};
+
+use diffy_iced_runtime::debounce::{DebounceAction, DebounceToken, Debouncer};
 
 use crate::background;
 use crate::code_view::{CodeView, CodeViewInputs};
 use crate::document::Document;
 use crate::gutter::GutterConfig;
 use crate::insets::CodeViewInsets;
-use crate::measurement::{MeasurementKey, MeasurementRequest, MeasurementResult, measure_document};
+use crate::measurement::{
+  MeasurementKey, MeasurementKind, MeasurementRequest, MeasurementResult, measure_document,
+};
 use crate::policies::TabDisplayPolicy;
 use crate::style::CodeViewStyle;
 use crate::text_layout::{TextLayoutConfig, WrapMode};
@@ -26,6 +31,7 @@ pub struct CodeViewController {
 
   measurement_result: Option<MeasurementResult>,
   active_measurement: Option<ActiveMeasurementJob>,
+  soft_wrap_measurement: Debouncer<MeasurementRequest, CodeViewMessage>,
 }
 
 struct ActiveMeasurementJob {
@@ -50,25 +56,34 @@ pub struct CodeViewMessage {
 impl CodeViewMessage {
   fn measurement_requested(request: MeasurementRequest) -> Self {
     Self {
-      event: CodeViewEvent::MeasurementRequested { request },
+      event: CodeViewEvent::RequestMeasurement { request },
     }
   }
 
   fn measurement_finished(session_id: u64, result: MeasurementResult) -> Self {
     Self {
-      event: CodeViewEvent::MeasurementFinished { session_id, result },
+      event: CodeViewEvent::FinishMeasurement { session_id, result },
+    }
+  }
+
+  fn measurement_debounce_elapsed(token: DebounceToken) -> Self {
+    Self {
+      event: CodeViewEvent::MeasurementDebounceElapsed { token },
     }
   }
 }
 
 #[derive(Debug, Clone)]
 enum CodeViewEvent {
-  MeasurementRequested {
+  RequestMeasurement {
     request: MeasurementRequest,
   },
-  MeasurementFinished {
+  FinishMeasurement {
     session_id: u64,
     result: MeasurementResult,
+  },
+  MeasurementDebounceElapsed {
+    token: DebounceToken,
   },
 }
 
@@ -87,6 +102,10 @@ impl CodeViewController {
 
       measurement_result: None,
       active_measurement: None,
+      soft_wrap_measurement: Debouncer::new(
+        Duration::from_millis(100),
+        CodeViewMessage::measurement_debounce_elapsed,
+      ),
     }
   }
 
@@ -151,7 +170,7 @@ impl CodeViewController {
 
   pub fn set_font(&mut self, font: iced::Font) {
     self.text_layout_config.font = font;
-    self.invalidate_measurement();
+    self.invalidate_measurement_cycle();
   }
 
   pub fn font(&self) -> iced::Font {
@@ -165,7 +184,7 @@ impl CodeViewController {
 
   pub fn set_font_size(&mut self, font_size: f32) {
     self.text_layout_config.font_size = font_size;
-    self.invalidate_measurement();
+    self.invalidate_measurement_cycle();
   }
 
   pub fn font_size(&self) -> f32 {
@@ -179,7 +198,7 @@ impl CodeViewController {
 
   pub fn set_line_height(&mut self, line_height: f32) {
     self.text_layout_config.line_height = line_height;
-    self.invalidate_measurement();
+    self.invalidate_measurement_cycle();
   }
 
   pub fn line_height(&self) -> f32 {
@@ -193,7 +212,7 @@ impl CodeViewController {
 
   pub fn set_wrap_mode(&mut self, wrap_mode: WrapMode) {
     self.text_layout_config.wrap_mode = wrap_mode;
-    self.invalidate_measurement();
+    self.invalidate_measurement_cycle();
   }
 
   pub fn wrap_mode(&self) -> WrapMode {
@@ -207,7 +226,7 @@ impl CodeViewController {
 
   pub fn set_tab_display_policy(&mut self, tab_display_policy: TabDisplayPolicy) {
     self.text_layout_config.tab_display_policy = tab_display_policy;
-    self.invalidate_measurement();
+    self.invalidate_measurement_cycle();
   }
 
   pub fn tab_display_policy(&self) -> TabDisplayPolicy {
@@ -244,7 +263,7 @@ impl CodeViewController {
 
 impl CodeViewController {
   pub fn set_document(&mut self, document: Document) {
-    self.invalidate_measurement();
+    self.invalidate_measurement_cycle();
 
     self.document = document;
     self.session_id = next_session_id();
@@ -263,6 +282,11 @@ impl CodeViewController {
   fn invalidate_measurement(&mut self) {
     self.cancel_active_measurement();
     self.measurement_result = None;
+  }
+
+  fn invalidate_measurement_cycle(&mut self) {
+    self.invalidate_measurement();
+    self.soft_wrap_measurement.reset();
   }
 
   fn on_measurement_requested(&mut self, request: MeasurementRequest) -> Task<CodeViewMessage> {
@@ -290,6 +314,13 @@ impl CodeViewController {
       return Task::none();
     }
 
+    match request.key.kind {
+      MeasurementKind::NoWrapHorizontalExtent => self.start_measurement(request),
+      MeasurementKind::SoftWrapLineHeights { .. } => self.schedule_soft_wrap_measurement(request),
+    }
+  }
+
+  fn start_measurement(&mut self, request: MeasurementRequest) -> Task<CodeViewMessage> {
     self.cancel_active_measurement();
 
     let session_id = self.session_id;
@@ -303,6 +334,47 @@ impl CodeViewController {
     });
 
     measure_document_task(session_id, request, cancel)
+  }
+
+  fn schedule_soft_wrap_measurement(
+    &mut self,
+    request: MeasurementRequest,
+  ) -> Task<CodeViewMessage> {
+    match self.soft_wrap_measurement.request(request) {
+      DebounceAction::StartNow(request) => self.start_measurement(request),
+      DebounceAction::Wait(task) => {
+        self.cancel_active_measurement();
+        task
+      }
+    }
+  }
+
+  fn on_measurement_debounce_elapsed(&mut self, token: DebounceToken) -> Task<CodeViewMessage> {
+    let Some(request) = self.soft_wrap_measurement.elapsed(token) else {
+      return Task::none();
+    };
+
+    if request.key.document_revision != self.document.revision() {
+      return Task::none();
+    }
+
+    if self
+      .measurement_result
+      .as_ref()
+      .is_some_and(|result| result.key == request.key)
+    {
+      return Task::none();
+    }
+
+    if self
+      .active_measurement
+      .as_ref()
+      .is_some_and(|active| active.session_id == self.session_id && active.key == request.key)
+    {
+      return Task::none();
+    }
+
+    self.start_measurement(request)
   }
 
   fn on_measurement_finished(
@@ -330,9 +402,12 @@ impl CodeViewController {
 
   pub fn update(&mut self, message: CodeViewMessage) -> Task<CodeViewMessage> {
     match message.event {
-      CodeViewEvent::MeasurementRequested { request } => self.on_measurement_requested(request),
-      CodeViewEvent::MeasurementFinished { session_id, result } => {
+      CodeViewEvent::RequestMeasurement { request } => self.on_measurement_requested(request),
+      CodeViewEvent::FinishMeasurement { session_id, result } => {
         self.on_measurement_finished(session_id, result)
+      }
+      CodeViewEvent::MeasurementDebounceElapsed { token } => {
+        self.on_measurement_debounce_elapsed(token)
       }
     }
   }
