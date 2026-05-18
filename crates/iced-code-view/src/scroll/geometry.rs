@@ -78,15 +78,14 @@ impl HorizontalGeometry {
       return;
     }
 
-    match &result.output {
-      MeasurementOutput::NoWrapHorizontalExtent { content_width } => {
-        *self = Self::Exact {
-          key: result.key,
-          content_width: *content_width,
-        }
-      }
-      MeasurementOutput::SoftWrapLineHeights { wrap_row_counts: _ } => {}
-    }
+    let MeasurementOutput::NoWrapHorizontalExtent { content_width } = &result.output else {
+      return;
+    };
+
+    *self = Self::Exact {
+      key: result.key,
+      content_width: *content_width,
+    };
   }
 }
 
