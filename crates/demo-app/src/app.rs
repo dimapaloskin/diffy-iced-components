@@ -1,8 +1,12 @@
+mod top_bar;
+
 use iced::keyboard::{self, key};
-use iced::widget::{column, container, operation, row, space, text};
+use iced::widget::{column, container, operation};
 use iced::{Element, Length, Subscription, Task, alignment};
 
-use crate::ui::{Icon, Sizing, Theme, button, button::Variant};
+use self::top_bar::{TopBar, top_bar};
+
+use crate::ui::Theme;
 
 use iced_code_view::{
   CodeViewController, CodeViewInsets, CodeViewMessage, CodeViewStyle, Document, GutterConfig,
@@ -24,7 +28,7 @@ pub enum AppMessage {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ThemeMode {
+pub(super) enum ThemeMode {
   Light,
   Dark,
 }
@@ -146,100 +150,20 @@ impl App {
   }
 
   pub fn view(&self) -> Element<'_, AppMessage, Theme> {
-    let button_size = Sizing::Sm;
+    let top_bar = top_bar(TopBar {
+      selected_file: self.selected_file,
+      line_count: self.code_view.line_count(),
+      line_numbers: self.code_view.gutter_config().content.line_numbers,
+      wrap_mode: self.code_view.wrap_mode(),
+      theme_override: self.theme_override,
+    });
 
-    let file_buttons =
-      files::FILES
-        .iter()
-        .enumerate()
-        .fold(row![].spacing(8), |row, (index, (name, _))| {
-          let button_variant = if index == self.selected_file {
-            Variant::Primary
-          } else {
-            Variant::Secondary
-          };
-
-          row.push(
-            button(*name)
-              .size(button_size)
-              .leading_icon(Icon::File)
-              .content_y_offset(-0.5)
-              .variant(button_variant)
-              .on_press(AppMessage::SelectFile(index)),
-          )
-        });
-
-    let gutter_button_variant = if self.code_view.gutter_config().content.line_numbers {
-      Variant::Primary
-    } else {
-      Variant::Secondary
-    };
-
-    let wrap_button_variant = match self.code_view.wrap_mode() {
-      WrapMode::NoWrap => Variant::Secondary,
-      WrapMode::SoftWrap => Variant::Primary,
-    };
-
-    let system_theme_button = button(Icon::Monitor)
-      .size(button_size)
-      .variant(selected_variant(self.theme_override.is_none()))
-      .on_press(AppMessage::UseSystemTheme);
-
-    let light_theme_button = button(Icon::Sun)
-      .size(button_size)
-      .variant(selected_variant(
-        self.theme_override == Some(ThemeMode::Light),
-      ))
-      .on_press(AppMessage::UseLightTheme);
-
-    let dark_theme_button = button(Icon::Moon)
-      .size(button_size)
-      .variant(selected_variant(
-        self.theme_override == Some(ThemeMode::Dark),
-      ))
-      .on_press(AppMessage::UseDarkTheme);
-
-    let gutter_button = button(Icon::ListOrdered)
-      .size(button_size)
-      .variant(gutter_button_variant)
-      .on_press(AppMessage::ToggleLineNumbers);
-
-    let wrap_mode_button = button(Icon::WrapText)
-      .size(button_size)
-      .variant(wrap_button_variant)
-      .on_press(AppMessage::ToggleWrapMode);
-
-    let theme_buttons = row![system_theme_button, light_theme_button, dark_theme_button].spacing(8);
-    let settings_buttons = row![gutter_button, wrap_mode_button].spacing(8);
-    let settings_row = row![settings_buttons, theme_buttons].spacing(16);
-
-    let status = format!(
-      "file: {}, lines: {}",
-      files::FILES[self.selected_file].0,
-      self.code_view.line_count()
-    );
-
-    container(
-      column![
-        row![file_buttons, space::horizontal(), settings_row],
-        text(status).font(iced::Font::MONOSPACE).size(16.0),
-        self.code_view.view().map(AppMessage::CodeView),
-      ]
-      .spacing(10.0),
-    )
-    .padding(10.0)
-    .width(Length::Fill)
-    .height(Length::Fill)
-    .align_x(alignment::Horizontal::Center)
-    .align_y(alignment::Vertical::Center)
-    .into()
-  }
-}
-
-fn selected_variant(selected: bool) -> Variant {
-  if selected {
-    Variant::Primary
-  } else {
-    Variant::Secondary
+    container(column![top_bar, self.code_view.view().map(AppMessage::CodeView),].spacing(10.0))
+      .padding(10.0)
+      .width(Length::Fill)
+      .height(Length::Fill)
+      .align_x(alignment::Horizontal::Center)
+      .align_y(alignment::Vertical::Center)
+      .into()
   }
 }
