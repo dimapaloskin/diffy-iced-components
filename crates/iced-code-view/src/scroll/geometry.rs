@@ -171,6 +171,12 @@ impl WrappedVerticalGeometry {
       return;
     };
 
+    debug_assert_eq!(
+      wrap_row_counts.len(),
+      self.source_line_count,
+      "soft-wrap measurement result must match document source line count"
+    );
+
     if wrap_row_counts.len() != self.source_line_count {
       return;
     }
@@ -388,6 +394,10 @@ mod tests {
   }
 
   #[test]
+  #[cfg_attr(
+    debug_assertions,
+    should_panic(expected = "soft-wrap measurement result must match document source line count")
+  )]
   fn soft_wrap_line_heights_result_with_wrong_line_count_is_ignored() {
     let key = soft_wrap_key(1, 320.0, 20.0);
     let mut geometry = ScrollGeometry::default();
