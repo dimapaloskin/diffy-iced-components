@@ -6,3 +6,4 @@ edition.workspace = true
 [dependencies]
 iced.workspace = true
 iced-code-view = { path = "../iced-code-view" }
+diffy-lucide-icons.workspace = true
