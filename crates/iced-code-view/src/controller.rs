@@ -115,8 +115,11 @@ impl CodeViewController {
   }
 
   pub fn set_width(&mut self, width: Length) {
+    if self.width == width {
+      return;
+    }
+
     self.width = width;
-    self.invalidate_measurement();
   }
 
   pub fn width(&self) -> Length {
@@ -129,6 +132,10 @@ impl CodeViewController {
   }
 
   pub fn set_height(&mut self, height: Length) {
+    if self.height == height {
+      return;
+    }
+
     self.height = height;
   }
 
@@ -142,6 +149,10 @@ impl CodeViewController {
   }
 
   pub fn set_border_radius(&mut self, border_radius: iced::border::Radius) {
+    if self.border_radius == border_radius {
+      return;
+    }
+
     self.border_radius = border_radius;
   }
 
@@ -155,8 +166,11 @@ impl CodeViewController {
   }
 
   pub fn set_insets(&mut self, insets: CodeViewInsets) {
+    if self.insets == insets {
+      return;
+    }
+
     self.insets = insets;
-    self.invalidate_measurement();
   }
 
   pub fn insets(&self) -> CodeViewInsets {
@@ -169,8 +183,12 @@ impl CodeViewController {
   }
 
   pub fn set_font(&mut self, font: iced::Font) {
+    if self.text_layout_config.font == font {
+      return;
+    }
+
     self.text_layout_config.font = font;
-    self.invalidate_measurement_cycle();
+    self.soft_wrap_measurement.reset();
   }
 
   pub fn font(&self) -> iced::Font {
@@ -183,8 +201,12 @@ impl CodeViewController {
   }
 
   pub fn set_font_size(&mut self, font_size: f32) {
+    if self.text_layout_config.font_size == font_size {
+      return;
+    }
+
     self.text_layout_config.font_size = font_size;
-    self.invalidate_measurement_cycle();
+    self.soft_wrap_measurement.reset();
   }
 
   pub fn font_size(&self) -> f32 {
@@ -197,8 +219,12 @@ impl CodeViewController {
   }
 
   pub fn set_line_height(&mut self, line_height: f32) {
+    if self.text_layout_config.line_height == line_height {
+      return;
+    }
+
     self.text_layout_config.line_height = line_height;
-    self.invalidate_measurement_cycle();
+    self.soft_wrap_measurement.reset();
   }
 
   pub fn line_height(&self) -> f32 {
@@ -211,8 +237,12 @@ impl CodeViewController {
   }
 
   pub fn set_wrap_mode(&mut self, wrap_mode: WrapMode) {
+    if self.text_layout_config.wrap_mode == wrap_mode {
+      return;
+    }
+
     self.text_layout_config.wrap_mode = wrap_mode;
-    self.invalidate_measurement_cycle();
+    self.soft_wrap_measurement.reset();
   }
 
   pub fn wrap_mode(&self) -> WrapMode {
@@ -225,8 +255,12 @@ impl CodeViewController {
   }
 
   pub fn set_tab_display_policy(&mut self, tab_display_policy: TabDisplayPolicy) {
+    if self.text_layout_config.tab_display_policy == tab_display_policy {
+      return;
+    }
+
     self.text_layout_config.tab_display_policy = tab_display_policy;
-    self.invalidate_measurement_cycle();
+    self.soft_wrap_measurement.reset();
   }
 
   pub fn tab_display_policy(&self) -> TabDisplayPolicy {
@@ -239,8 +273,11 @@ impl CodeViewController {
   }
 
   pub fn set_gutter_config(&mut self, gutter_config: GutterConfig) {
+    if self.gutter_config == gutter_config {
+      return;
+    }
+
     self.gutter_config = gutter_config;
-    self.invalidate_measurement();
   }
 
   pub fn gutter_config(&self) -> GutterConfig {
@@ -253,6 +290,10 @@ impl CodeViewController {
   }
 
   pub fn set_style(&mut self, style: CodeViewStyle) {
+    if self.style == style {
+      return;
+    }
+
     self.style = style;
   }
 
@@ -263,7 +304,10 @@ impl CodeViewController {
 
 impl CodeViewController {
   pub fn set_document(&mut self, document: Document) {
-    self.invalidate_measurement_cycle();
+    self.cancel_active_measurement();
+
+    self.measurement_result = None;
+    self.soft_wrap_measurement.reset();
 
     self.document = document;
     self.session_id = next_session_id();
@@ -277,16 +321,6 @@ impl CodeViewController {
     if let Some(active) = self.active_measurement.take() {
       active.cancel();
     }
-  }
-
-  fn invalidate_measurement(&mut self) {
-    self.cancel_active_measurement();
-    self.measurement_result = None;
-  }
-
-  fn invalidate_measurement_cycle(&mut self) {
-    self.invalidate_measurement();
-    self.soft_wrap_measurement.reset();
   }
 
   fn on_measurement_requested(&mut self, request: MeasurementRequest) -> Task<CodeViewMessage> {
