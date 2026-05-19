@@ -14,7 +14,7 @@ use crate::ui::sizing::Sizing;
 use crate::ui::theme::Theme;
 
 pub use self::metrics::Metrics;
-pub use self::style::{FocusRing, Status, Style, Variant};
+pub use self::style::{FocusRing, Mode, Status, Style, Variant};
 
 use self::style::Class;
 use self::widget::ButtonWidget;
@@ -76,7 +76,7 @@ pub fn button<'a, Message>(content: impl Into<Content<'a>>) -> Button<'a, Messag
     icon_y_offset: None,
     leading_icon: None,
     trailing_icon: None,
-    class: Class::Variant(Variant::default()),
+    class: Class::built_in(Variant::default(), Mode::default()),
     on_press: None,
   }
 }
@@ -126,7 +126,12 @@ impl<'a, Message> Button<'a, Message> {
   }
 
   pub fn variant(mut self, variant: Variant) -> Self {
-    self.class = Class::Variant(variant);
+    self.class.set_variant(variant);
+    self
+  }
+
+  pub fn mode(mut self, mode: Mode) -> Self {
+    self.class.set_mode(mode);
     self
   }
 

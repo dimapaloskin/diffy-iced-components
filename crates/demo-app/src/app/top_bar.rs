@@ -3,7 +3,8 @@ use iced::{Element, Length};
 use iced_code_view::WrapMode;
 
 use crate::files;
-use crate::ui::{Icon, Sizing, Theme, button, button::Variant};
+use crate::ui::button::{Mode, Variant};
+use crate::ui::{Icon, Sizing, Theme, button};
 
 use super::{AppMessage, ThemeMode};
 
@@ -23,10 +24,11 @@ pub(super) fn top_bar(state: TopBar) -> Element<'static, AppMessage, Theme> {
       .iter()
       .enumerate()
       .fold(row![].spacing(8), |row, (index, (name, _))| {
-        let button_variant = if index == state.selected_file {
-          Variant::Primary
+        let button_variant = selected_variant(index == state.selected_file);
+        let button_mode = if index == state.selected_file {
+          Mode::Fill
         } else {
-          Variant::Secondary
+          Mode::Light
         };
 
         row.push(
@@ -35,6 +37,7 @@ pub(super) fn top_bar(state: TopBar) -> Element<'static, AppMessage, Theme> {
             .leading_icon(Icon::File)
             .content_y_offset(-0.5)
             .variant(button_variant)
+            .mode(button_mode)
             .on_press(AppMessage::SelectFile(index)),
         )
       });
@@ -42,13 +45,14 @@ pub(super) fn top_bar(state: TopBar) -> Element<'static, AppMessage, Theme> {
   let gutter_button_variant = selected_variant(state.line_numbers);
 
   let wrap_button_variant = match state.wrap_mode {
-    WrapMode::NoWrap => Variant::Secondary,
+    WrapMode::NoWrap => Variant::Neutral,
     WrapMode::SoftWrap => Variant::Primary,
   };
 
   let system_theme_button = button(Icon::Monitor)
     .size(button_size)
     .variant(selected_variant(state.theme_override.is_none()))
+    .mode(Mode::Fill)
     .on_press(AppMessage::UseSystemTheme);
 
   let light_theme_button = button(Icon::Sun)
@@ -56,6 +60,7 @@ pub(super) fn top_bar(state: TopBar) -> Element<'static, AppMessage, Theme> {
     .variant(selected_variant(
       state.theme_override == Some(ThemeMode::Light),
     ))
+    .mode(Mode::Fill)
     .on_press(AppMessage::UseLightTheme);
 
   let dark_theme_button = button(Icon::Moon)
@@ -63,16 +68,19 @@ pub(super) fn top_bar(state: TopBar) -> Element<'static, AppMessage, Theme> {
     .variant(selected_variant(
       state.theme_override == Some(ThemeMode::Dark),
     ))
+    .mode(Mode::Fill)
     .on_press(AppMessage::UseDarkTheme);
 
   let gutter_button = button(Icon::ListOrdered)
     .size(button_size)
     .variant(gutter_button_variant)
+    .mode(Mode::Fill)
     .on_press(AppMessage::ToggleLineNumbers);
 
   let wrap_mode_button = button(Icon::WrapText)
     .size(button_size)
     .variant(wrap_button_variant)
+    .mode(Mode::Fill)
     .on_press(AppMessage::ToggleWrapMode);
 
   let theme_buttons = row![system_theme_button, light_theme_button, dark_theme_button].spacing(8);
@@ -99,6 +107,6 @@ fn selected_variant(selected: bool) -> Variant {
   if selected {
     Variant::Primary
   } else {
-    Variant::Secondary
+    Variant::Neutral
   }
 }

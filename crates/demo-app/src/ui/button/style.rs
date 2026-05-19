@@ -4,11 +4,17 @@ use crate::ui::theme::Theme;
 pub enum Variant {
   #[default]
   Primary,
-  Secondary,
+  Neutral,
+  Danger,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub enum Mode {
+  #[default]
+  Fill,
+  Light,
   Outline,
   Ghost,
-  Danger,
-  Link,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -43,22 +49,294 @@ pub enum Status {
   Disabled,
 }
 
-pub(super) type StyleFn<'a> = dyn Fn(&Theme, Status) -> Style + 'a;
+pub(super) type StyleFn<'a> = Box<dyn Fn(&Theme, Status) -> Style + 'a>;
 
 pub(super) enum Class<'a> {
-  Variant(Variant),
-  Custom(Box<StyleFn<'a>>),
+  BuiltIn { variant: Variant, mode: Mode },
+  Custom(StyleFn<'a>),
+}
+
+impl<'a> Class<'a> {
+  pub(super) fn built_in(variant: Variant, mode: Mode) -> Self {
+    Self::BuiltIn { variant, mode }
+  }
+
+  pub(super) fn set_variant(&mut self, variant: Variant) {
+    match self {
+      Self::BuiltIn {
+        variant: current, ..
+      } => *current = variant,
+      Self::Custom(_) => *self = Self::built_in(variant, Mode::default()),
+    }
+  }
+
+  pub(super) fn set_mode(&mut self, mode: Mode) {
+    match self {
+      Self::BuiltIn { mode: current, .. } => *current = mode,
+      Self::Custom(_) => *self = Self::built_in(Variant::default(), mode),
+    }
+  }
 }
 
 pub(super) fn resolve(theme: &Theme, class: &Class<'_>, status: Status) -> Style {
   match class {
-    Class::Variant(Variant::Primary) => primary(theme, status),
-    Class::Variant(Variant::Secondary) => secondary(theme, status),
-    Class::Variant(Variant::Outline) => outline(theme, status),
-    Class::Variant(Variant::Ghost) => ghost(theme, status),
-    Class::Variant(Variant::Danger) => danger(theme, status),
-    Class::Variant(Variant::Link) => link(theme, status),
+    Class::BuiltIn { variant, mode } => built_in(theme, *variant, *mode, status),
     Class::Custom(style) => style(theme, status),
+  }
+}
+
+fn built_in(theme: &Theme, variant: Variant, mode: Mode, status: Status) -> Style {
+  match status {
+    Status::Disabled => disabled(theme, mode),
+    Status::Focused => focused(theme, focus_base(theme, variant, mode)),
+    Status::Active | Status::Hovered | Status::Pressed => mode_style(theme, variant, mode, status),
+  }
+}
+
+fn mode_style(theme: &Theme, variant: Variant, mode: Mode, status: Status) -> Style {
+  match mode {
+    Mode::Fill => fill(theme, variant, status),
+    Mode::Light => light(theme, variant, status),
+    Mode::Outline => outline(theme, variant, status),
+    Mode::Ghost => ghost(theme, variant, status),
+  }
+}
+
+fn fill(theme: &Theme, variant: Variant, status: Status) -> Style {
+  let colors = theme.colors;
+  let shadows = theme.shadows;
+
+  let (background, hovered, pressed, foreground) = match variant {
+    Variant::Primary => (
+      colors.primary,
+      colors.primary_hovered,
+      colors.primary_pressed,
+      colors.primary_foreground,
+    ),
+    Variant::Neutral => (
+      colors.surface,
+      colors.surface_hovered,
+      colors.surface_pressed,
+      colors.foreground,
+    ),
+    Variant::Danger => (
+      colors.danger,
+      colors.danger_hovered,
+      colors.danger_pressed,
+      colors.danger_foreground,
+    ),
+  };
+
+  match status {
+    Status::Active => button_style(
+      theme,
+      Some(background),
+      foreground,
+      background,
+      0.0,
+      shadows.none,
+    ),
+    Status::Hovered => button_style(
+      theme,
+      Some(hovered),
+      foreground,
+      hovered,
+      0.0,
+      shadows.control_hovered,
+    ),
+    Status::Pressed => button_style(
+      theme,
+      Some(pressed),
+      foreground,
+      pressed,
+      0.0,
+      shadows.control_pressed,
+    ),
+    Status::Focused | Status::Disabled => unreachable!("handled before mode style resolution"),
+  }
+}
+
+fn light(theme: &Theme, variant: Variant, status: Status) -> Style {
+  let colors = theme.colors;
+  let shadows = theme.shadows;
+  let text_color = semantic_text(theme, variant);
+
+  match status {
+    Status::Active => button_style(
+      theme,
+      Some(colors.surface),
+      text_color,
+      iced::Color::TRANSPARENT,
+      0.0,
+      shadows.none,
+    ),
+    Status::Hovered => button_style(
+      theme,
+      Some(colors.surface_hovered),
+      text_color,
+      iced::Color::TRANSPARENT,
+      0.0,
+      shadows.control_hovered,
+    ),
+    Status::Pressed => button_style(
+      theme,
+      Some(colors.surface_pressed),
+      text_color,
+      iced::Color::TRANSPARENT,
+      0.0,
+      shadows.control_pressed,
+    ),
+    Status::Focused | Status::Disabled => unreachable!("handled before mode style resolution"),
+  }
+}
+
+fn outline(theme: &Theme, variant: Variant, status: Status) -> Style {
+  let shadows = theme.shadows;
+  let text_color = semantic_text(theme, variant);
+  let (border, _, _) = semantic_border(theme, variant);
+  let tint = semantic_tint(theme, variant);
+
+  match status {
+    Status::Active => button_style(
+      theme,
+      None,
+      text_color,
+      border,
+      theme.border_width,
+      shadows.none,
+    ),
+    Status::Hovered => button_style(
+      theme,
+      Some(tint.scale_alpha(0.10)),
+      text_color,
+      tint.scale_alpha(0.10),
+      theme.border_width,
+      shadows.control_hovered,
+    ),
+    Status::Pressed => button_style(
+      theme,
+      Some(tint.scale_alpha(0.16)),
+      text_color,
+      tint.scale_alpha(0.16),
+      theme.border_width,
+      shadows.control_pressed,
+    ),
+    Status::Focused | Status::Disabled => unreachable!("handled before mode style resolution"),
+  }
+}
+
+fn ghost(theme: &Theme, variant: Variant, status: Status) -> Style {
+  let colors = theme.colors;
+  let shadows = theme.shadows;
+  let text_color = semantic_text(theme, variant);
+
+  match status {
+    Status::Active => button_style(
+      theme,
+      None,
+      text_color,
+      iced::Color::TRANSPARENT,
+      0.0,
+      shadows.none,
+    ),
+    Status::Hovered => button_style(
+      theme,
+      Some(colors.surface_hovered),
+      text_color,
+      iced::Color::TRANSPARENT,
+      0.0,
+      shadows.none,
+    ),
+    Status::Pressed => button_style(
+      theme,
+      Some(colors.surface_pressed),
+      text_color,
+      iced::Color::TRANSPARENT,
+      0.0,
+      shadows.none,
+    ),
+    Status::Focused | Status::Disabled => unreachable!("handled before mode style resolution"),
+  }
+}
+
+fn focus_base(theme: &Theme, variant: Variant, mode: Mode) -> Style {
+  let status = match mode {
+    Mode::Ghost => Status::Hovered,
+    Mode::Fill | Mode::Light | Mode::Outline => Status::Active,
+  };
+
+  let style = mode_style(theme, variant, mode, status);
+
+  match mode {
+    Mode::Fill | Mode::Light | Mode::Outline => with_shadow(style, theme.shadows.control_hovered),
+    Mode::Ghost => style,
+  }
+}
+
+fn disabled(theme: &Theme, mode: Mode) -> Style {
+  let colors = theme.colors;
+  let shadows = theme.shadows;
+
+  match mode {
+    Mode::Fill | Mode::Light => button_style(
+      theme,
+      Some(colors.surface),
+      colors.muted_foreground,
+      iced::Color::TRANSPARENT,
+      0.0,
+      shadows.none,
+    ),
+    Mode::Outline => button_style(
+      theme,
+      None,
+      colors.muted_foreground,
+      colors.border,
+      theme.border_width,
+      shadows.none,
+    ),
+    Mode::Ghost => button_style(
+      theme,
+      None,
+      colors.muted_foreground,
+      iced::Color::TRANSPARENT,
+      0.0,
+      shadows.none,
+    ),
+  }
+}
+
+fn semantic_text(theme: &Theme, variant: Variant) -> iced::Color {
+  match variant {
+    Variant::Primary | Variant::Neutral => theme.colors.foreground,
+    Variant::Danger => theme.colors.danger_text,
+  }
+}
+
+fn semantic_border(theme: &Theme, variant: Variant) -> (iced::Color, iced::Color, iced::Color) {
+  match variant {
+    Variant::Primary => (
+      theme.colors.primary,
+      theme.colors.primary_hovered,
+      theme.colors.primary_pressed,
+    ),
+    Variant::Neutral => (
+      theme.colors.border,
+      theme.colors.border_strong,
+      theme.colors.border,
+    ),
+    Variant::Danger => (
+      theme.colors.danger,
+      theme.colors.danger_hovered,
+      theme.colors.danger_pressed,
+    ),
+  }
+}
+
+fn semantic_tint(theme: &Theme, variant: Variant) -> iced::Color {
+  match variant {
+    Variant::Primary => theme.colors.primary,
+    Variant::Neutral => theme.colors.foreground,
+    Variant::Danger => theme.colors.danger,
   }
 }
 
@@ -93,318 +371,7 @@ fn focused(theme: &Theme, mut style: Style) -> Style {
   style
 }
 
-pub fn primary(theme: &Theme, status: Status) -> Style {
-  let colors = theme.colors;
-  let shadows = theme.shadows;
-
-  match status {
-    Status::Active => button_style(
-      theme,
-      Some(colors.primary),
-      colors.primary_foreground,
-      colors.primary,
-      0.0,
-      shadows.none,
-    ),
-    Status::Hovered => button_style(
-      theme,
-      Some(colors.primary_hovered),
-      colors.primary_foreground,
-      colors.primary_hovered,
-      0.0,
-      shadows.control_hovered,
-    ),
-    Status::Pressed => button_style(
-      theme,
-      Some(colors.primary_pressed),
-      colors.primary_foreground,
-      colors.primary_pressed,
-      0.0,
-      shadows.control_pressed,
-    ),
-    Status::Focused => focused(
-      theme,
-      button_style(
-        theme,
-        Some(colors.primary),
-        colors.primary_foreground,
-        colors.primary,
-        0.0,
-        shadows.control_hovered,
-      ),
-    ),
-    Status::Disabled => button_style(
-      theme,
-      Some(colors.surface),
-      colors.muted_foreground,
-      colors.border,
-      0.0,
-      shadows.none,
-    ),
-  }
-}
-
-pub fn secondary(theme: &Theme, status: Status) -> Style {
-  let colors = theme.colors;
-  let shadows = theme.shadows;
-
-  match status {
-    Status::Active => button_style(
-      theme,
-      Some(colors.surface),
-      colors.foreground,
-      iced::Color::TRANSPARENT,
-      0.0,
-      shadows.none,
-    ),
-    Status::Hovered => button_style(
-      theme,
-      Some(colors.surface_hovered),
-      colors.foreground,
-      iced::Color::TRANSPARENT,
-      0.0,
-      shadows.control_hovered,
-    ),
-    Status::Pressed => button_style(
-      theme,
-      Some(colors.surface_pressed),
-      colors.foreground,
-      iced::Color::TRANSPARENT,
-      0.0,
-      shadows.control_pressed,
-    ),
-    Status::Focused => focused(
-      theme,
-      button_style(
-        theme,
-        Some(colors.surface),
-        colors.foreground,
-        iced::Color::TRANSPARENT,
-        0.0,
-        shadows.control_hovered,
-      ),
-    ),
-    Status::Disabled => button_style(
-      theme,
-      Some(colors.surface),
-      colors.muted_foreground,
-      iced::Color::TRANSPARENT,
-      0.0,
-      shadows.none,
-    ),
-  }
-}
-
-pub fn outline(theme: &Theme, status: Status) -> Style {
-  let colors = theme.colors;
-  let shadows = theme.shadows;
-
-  match status {
-    Status::Active => button_style(
-      theme,
-      None,
-      colors.foreground,
-      colors.border,
-      theme.border_width,
-      shadows.none,
-    ),
-    Status::Hovered => button_style(
-      theme,
-      Some(colors.surface_hovered),
-      colors.foreground,
-      colors.border_strong,
-      theme.border_width,
-      shadows.control_hovered,
-    ),
-    Status::Pressed => button_style(
-      theme,
-      Some(colors.surface_pressed),
-      colors.foreground,
-      colors.border,
-      theme.border_width,
-      shadows.control_pressed,
-    ),
-    Status::Focused => focused(
-      theme,
-      button_style(
-        theme,
-        None,
-        colors.foreground,
-        colors.border_strong,
-        theme.border_width,
-        shadows.control_hovered,
-      ),
-    ),
-    Status::Disabled => button_style(
-      theme,
-      None,
-      colors.muted_foreground,
-      colors.border,
-      theme.border_width,
-      shadows.none,
-    ),
-  }
-}
-
-pub fn ghost(theme: &Theme, status: Status) -> Style {
-  let colors = theme.colors;
-  let shadows = theme.shadows;
-
-  match status {
-    Status::Active => button_style(
-      theme,
-      None,
-      colors.foreground,
-      iced::Color::TRANSPARENT,
-      0.0,
-      shadows.none,
-    ),
-    Status::Hovered => button_style(
-      theme,
-      Some(colors.surface_hovered),
-      colors.foreground,
-      iced::Color::TRANSPARENT,
-      0.0,
-      shadows.none,
-    ),
-    Status::Pressed => button_style(
-      theme,
-      Some(colors.surface_pressed),
-      colors.foreground,
-      iced::Color::TRANSPARENT,
-      0.0,
-      shadows.none,
-    ),
-    Status::Focused => focused(
-      theme,
-      button_style(
-        theme,
-        Some(colors.surface_hovered),
-        colors.foreground,
-        iced::Color::TRANSPARENT,
-        0.0,
-        shadows.none,
-      ),
-    ),
-    Status::Disabled => button_style(
-      theme,
-      None,
-      colors.muted_foreground,
-      iced::Color::TRANSPARENT,
-      0.0,
-      shadows.none,
-    ),
-  }
-}
-
-pub fn danger(theme: &Theme, status: Status) -> Style {
-  let colors = theme.colors;
-  let shadows = theme.shadows;
-
-  match status {
-    Status::Active => button_style(
-      theme,
-      Some(colors.danger),
-      colors.danger_foreground,
-      colors.danger,
-      0.0,
-      shadows.none,
-    ),
-    Status::Hovered => button_style(
-      theme,
-      Some(colors.danger_hovered),
-      colors.danger_foreground,
-      colors.danger_hovered,
-      0.0,
-      shadows.control_hovered,
-    ),
-    Status::Pressed => button_style(
-      theme,
-      Some(colors.danger_pressed),
-      colors.danger_foreground,
-      colors.danger_pressed,
-      0.0,
-      shadows.control_pressed,
-    ),
-    Status::Focused => focused(
-      theme,
-      button_style(
-        theme,
-        Some(colors.danger),
-        colors.danger_foreground,
-        colors.danger,
-        0.0,
-        shadows.control_hovered,
-      ),
-    ),
-    Status::Disabled => button_style(
-      theme,
-      Some(colors.surface),
-      colors.muted_foreground,
-      colors.border,
-      0.0,
-      shadows.none,
-    ),
-  }
-}
-
-pub fn link(theme: &Theme, status: Status) -> Style {
-  const UNDERLINE: Underline = Underline {
-    width: 1.5,
-    offset: 3.0,
-  };
-
-  let colors = theme.colors;
-  let shadows = theme.shadows;
-  let mut style = match status {
-    Status::Active => button_style(
-      theme,
-      None,
-      colors.foreground,
-      iced::Color::TRANSPARENT,
-      0.0,
-      shadows.none,
-    ),
-    Status::Hovered => button_style(
-      theme,
-      None,
-      colors.foreground,
-      iced::Color::TRANSPARENT,
-      0.0,
-      shadows.none,
-    ),
-    Status::Pressed => button_style(
-      theme,
-      None,
-      colors.foreground,
-      iced::Color::TRANSPARENT,
-      0.0,
-      shadows.none,
-    ),
-    Status::Focused => focused(
-      theme,
-      button_style(
-        theme,
-        None,
-        colors.foreground,
-        iced::Color::TRANSPARENT,
-        0.0,
-        shadows.none,
-      ),
-    ),
-    Status::Disabled => button_style(
-      theme,
-      None,
-      colors.muted_foreground,
-      iced::Color::TRANSPARENT,
-      0.0,
-      shadows.none,
-    ),
-  };
-
-  if matches!(status, Status::Hovered | Status::Pressed | Status::Focused) {
-    style.underline = Some(UNDERLINE);
-  }
-
+fn with_shadow(mut style: Style, shadow: iced::Shadow) -> Style {
+  style.shadow = shadow;
   style
 }

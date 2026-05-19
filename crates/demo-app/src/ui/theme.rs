@@ -16,7 +16,7 @@ impl Theme {
       colors: Colors::light(),
       shadows: Shadows::light(),
       radius: iced::border::radius(10.0),
-      border_width: 1.0,
+      border_width: 2.0,
       focus_ring_width: 2.0,
       focus_ring_offset: 2.0,
     }
@@ -28,7 +28,7 @@ impl Theme {
       colors: Colors::dark(),
       shadows: Shadows::dark(),
       radius: iced::border::radius(10.0),
-      border_width: 1.0,
+      border_width: 2.0,
       focus_ring_width: 2.0,
       focus_ring_offset: 2.0,
     }
@@ -169,6 +169,7 @@ pub struct Colors {
   pub danger: iced::Color,
   pub danger_hovered: iced::Color,
   pub danger_pressed: iced::Color,
+  pub danger_text: iced::Color,
   pub danger_foreground: iced::Color,
 }
 
@@ -195,6 +196,7 @@ impl Colors {
       danger: iced::Color::from_rgb8(0xdc, 0x26, 0x26),
       danger_hovered: iced::Color::from_rgb8(0xb9, 0x1c, 0x1c),
       danger_pressed: iced::Color::from_rgb8(0x99, 0x1b, 0x1b),
+      danger_text: iced::Color::from_rgb8(0xdc, 0x26, 0x26),
       danger_foreground: iced::Color::from_rgb8(0xfe, 0xf2, 0xf2),
     }
   }
@@ -221,6 +223,7 @@ impl Colors {
       danger: iced::Color::from_rgb8(0x7f, 0x1d, 0x1d),
       danger_hovered: iced::Color::from_rgb8(0x99, 0x1b, 0x1b),
       danger_pressed: iced::Color::from_rgb8(0x65, 0x17, 0x17),
+      danger_text: iced::Color::from_rgb8(0xef, 0x44, 0x44),
       danger_foreground: iced::Color::from_rgb8(0xfe, 0xf2, 0xf2),
     }
   }
