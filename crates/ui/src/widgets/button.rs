@@ -5,6 +5,7 @@ mod widget;
 use std::borrow::Cow;
 
 use crate::icon::Icon;
+use crate::size::Density;
 use crate::theme::Theme;
 
 pub use metrics::Metrics;
@@ -49,8 +50,8 @@ pub struct Button<'a, Message> {
 }
 
 impl<'a, Message> Button<'a, Message> {
-  pub fn size(mut self, size: impl Into<Metrics>) -> Self {
-    let metrics = size.into();
+  pub fn size(mut self, size: impl Into<Density>) -> Self {
+    let metrics = Metrics::from_density(size.into());
 
     self.height = iced::Length::Fixed(metrics.height);
     self.metrics = metrics;

@@ -4,5 +4,5 @@ pub mod theme;
 pub mod widgets;
 
 pub use icon::Icon;
-pub use size::Sizing;
+pub use size::{Density, PaddingLevel, PaddingScale, Sizing};
 pub use theme::{ColorScheme, Theme, ThemeTokens};
