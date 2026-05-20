@@ -1,6 +1,5 @@
 mod app;
 mod files;
-mod ui;
 
 use app::App;
 use diffy_lucide_icons::LUCIDE_FONT_BYTES;

@@ -5,6 +5,7 @@ members = [
   "crates/iced-code-view",
   "crates/lucide-icons",
   "crates/runtime",
+  "crates/ui",
 ]
 
 [workspace.package]
@@ -20,6 +21,7 @@ iced = { git = "https://github.com/iced-rs/iced", rev = "cf09909263c0b5a0ef43bbf
 ] }
 diffy-iced-runtime = { path = "crates/runtime" }
 diffy-lucide-icons = { path = "crates/lucide-icons" }
+diffy-ui = { path = "crates/ui" }
 
 [profile.release]
 opt-level = 3

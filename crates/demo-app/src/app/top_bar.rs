@@ -3,8 +3,8 @@ use iced::{Element, Length};
 use iced_code_view::WrapMode;
 
 use crate::files;
-use crate::ui::button::{Mode, Variant};
-use crate::ui::{Icon, Sizing, Theme, button};
+use diffy_ui::widgets::button::{Mode, Variant, button};
+use diffy_ui::{Icon, Sizing, Theme};
 
 use super::{AppMessage, ThemeMode};
 
@@ -33,11 +33,9 @@ pub(super) fn top_bar(state: TopBar) -> Element<'static, AppMessage, Theme> {
 
         row.push(
           button(*name)
-            .size(button_size)
-            .leading_icon(Icon::File)
-            .content_y_offset(-0.5)
             .variant(button_variant)
             .mode(button_mode)
+            .leading_icon(Icon::File)
             .on_press(AppMessage::SelectFile(index)),
         )
       });

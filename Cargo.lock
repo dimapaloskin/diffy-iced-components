@@ -354,6 +354,7 @@ name = "demo-app"
 version = "0.1.0"
 dependencies = [
  "diffy-lucide-icons",
+ "diffy-ui",
  "iced",
  "iced-code-view",
 ]
@@ -371,6 +372,14 @@ name = "diffy-lucide-icons"
 version = "0.1.0"
 dependencies = [
  "serde_json",
+]
+
+[[package]]
+name = "diffy-ui"
+version = "0.1.0"
+dependencies = [
+ "diffy-lucide-icons",
+ "iced",
 ]
 
 [[package]]

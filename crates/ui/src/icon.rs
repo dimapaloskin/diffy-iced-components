@@ -13,5 +13,5 @@ where
   iced::widget::text(icon.glyph())
     .font(FONT)
     .shaping(iced::widget::text::Shaping::Basic)
-    .align_y(iced::alignment::Vertical::Center)
+    .align_y(iced::Alignment::Center)
 }

@@ -6,7 +6,7 @@ use iced::{Element, Length, Subscription, Task, alignment};
 
 use self::top_bar::{TopBar, top_bar};
 
-use crate::ui::Theme;
+use diffy_ui::Theme;
 
 use iced_code_view::{
   CodeViewController, CodeViewInsets, CodeViewMessage, CodeViewStyle, Document, GutterConfig,
