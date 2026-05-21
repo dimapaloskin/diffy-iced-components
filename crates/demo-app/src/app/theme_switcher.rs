@@ -25,9 +25,12 @@ pub fn theme_switcher(
     .size(Sizing::Sm)
     .frame_width(4.0)
     .style(|theme, style| {
-      let color = match theme.scheme() {
-        ColorScheme::Dark => iced::Color::WHITE,
-        ColorScheme::Light => iced::Color::BLACK,
+      let color = match theme.tokens().colors.primary.background {
+        iced::Background::Color(color) => color,
+        _ => match theme.scheme() {
+          ColorScheme::Dark => iced::Color::WHITE,
+          ColorScheme::Light => iced::Color::BLACK,
+        },
       };
 
       style.frame_color(color)

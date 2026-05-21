@@ -8,7 +8,7 @@ use iced::{Alignment, Element, Event, Length, Rectangle, Size, Vector, keyboard,
 
 use crate::icon;
 use crate::theme::Theme;
-use crate::widgets::group::GroupContext;
+use crate::widgets::group::{GroupContext, GroupPosition};
 
 use super::metrics::Metrics;
 use super::style::{Mode, Status, Style, StyleFn, Variant};
@@ -118,6 +118,41 @@ impl<'a, Message, Renderer> ButtonWidget<'a, Message, Renderer> {
     }
 
     button_style
+  }
+
+  fn background_bounds(&self, bounds: Rectangle) -> Rectangle {
+    let Some(context) = self.grouped else {
+      return bounds;
+    };
+
+    let overlap = context.frame_width().clamp(0.0, 1.0);
+
+    if overlap <= 0.0 {
+      return bounds;
+    }
+
+    let mut bounds = Rectangle {
+      y: bounds.y - overlap,
+      height: bounds.height + overlap * 2.0,
+      ..bounds
+    };
+
+    match context.position() {
+      GroupPosition::Only => {
+        bounds.x -= overlap;
+        bounds.width += overlap * 2.0;
+      }
+      GroupPosition::First => {
+        bounds.x -= overlap;
+        bounds.width += overlap;
+      }
+      GroupPosition::Middle => {}
+      GroupPosition::Last => {
+        bounds.width += overlap;
+      }
+    }
+
+    bounds
   }
 }
 
@@ -270,6 +305,7 @@ where
     let bounds = layout.bounds();
     let status = self.status(state, cursor, bounds);
     let button_style = self.resolved_style(theme, status);
+    let background_bounds = self.background_bounds(bounds);
 
     if button_style.background.is_some()
       || button_style.border.width > 0.0
@@ -277,7 +313,7 @@ where
     {
       renderer.fill_quad(
         renderer::Quad {
-          bounds,
+          bounds: background_bounds,
           border: button_style.border,
           shadow: button_style.shadow,
           ..renderer::Quad::default()
