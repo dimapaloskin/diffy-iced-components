@@ -1,12 +1,14 @@
+mod theme_switcher;
 mod top_bar;
 
 use iced::keyboard::{self, key};
 use iced::widget::{column, container, operation};
-use iced::{Element, Length, Subscription, Task, alignment};
+use iced::{Element, Fill, Subscription, Task, alignment};
 
 use self::top_bar::{TopBar, top_bar};
 
 use diffy_ui::Theme;
+use diffy_ui::widgets::button::Variant as ButtonVariant;
 
 use iced_code_view::{
   CodeViewController, CodeViewInsets, CodeViewMessage, CodeViewStyle, Document, GutterConfig,
@@ -158,12 +160,20 @@ impl App {
       theme_override: self.theme_override,
     });
 
-    container(column![top_bar, self.code_view.view().map(AppMessage::CodeView),].spacing(10.0))
+    container(column![top_bar, self.code_view.view().map(AppMessage::CodeView)].spacing(10.0))
       .padding(10.0)
-      .width(Length::Fill)
-      .height(Length::Fill)
+      .width(Fill)
+      .height(Fill)
       .align_x(alignment::Horizontal::Center)
       .align_y(alignment::Vertical::Center)
       .into()
+  }
+}
+
+fn selected_variant(selected: bool) -> ButtonVariant {
+  if selected {
+    ButtonVariant::Primary
+  } else {
+    ButtonVariant::Neutral
   }
 }

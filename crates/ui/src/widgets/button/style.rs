@@ -1,4 +1,8 @@
+use derive_setters::Setters;
+
 use crate::theme::{FamilyTone, Theme};
+
+pub type StyleFn<'a> = Box<dyn Fn(&Theme, Status, Style) -> Style + 'a>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Variant {
@@ -43,9 +47,7 @@ pub struct FocusRing {
   pub offset: f32,
 }
 
-pub type StyleFn<'a> = Box<dyn Fn(&Theme, Status) -> Style + 'a>;
-
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Setters, Clone, Copy)]
 pub struct Style {
   pub background: Option<iced::Background>,
   pub text_color: iced::Color,

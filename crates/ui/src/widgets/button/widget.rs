@@ -2,12 +2,13 @@ use iced::advanced::renderer::Renderer as RendererTrait;
 use iced::advanced::text::Renderer as TextRenderer;
 use iced::advanced::widget::operation::Focusable;
 use iced::advanced::widget::{self, Operation, Tree};
-use iced::advanced::{Layout, Widget, layout, mouse, renderer};
+use iced::advanced::{Layout, Widget, layout, mouse, overlay, renderer};
 use iced::widget::row;
-use iced::{Alignment, Element, Event, Length, Rectangle, Size, keyboard, touch};
+use iced::{Alignment, Element, Event, Length, Rectangle, Size, Vector, keyboard, touch};
 
 use crate::icon;
 use crate::theme::Theme;
+use crate::widgets::group::GroupContext;
 
 use super::metrics::Metrics;
 use super::style::{Mode, Status, Style, StyleFn, Variant};
@@ -24,6 +25,7 @@ pub(super) struct ButtonWidget<'a, Message, Renderer> {
   style: Option<StyleFn<'a>>,
   icon_only: bool,
   pill: bool,
+  grouped: Option<GroupContext>,
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -73,6 +75,49 @@ impl<'a, Message, Renderer> ButtonWidget<'a, Message, Renderer> {
     } else {
       Status::Active
     }
+  }
+
+  fn radius(&self, theme: &Theme) -> iced::border::Radius {
+    let standalone_radius = if self.pill {
+      theme.radius().pill
+    } else {
+      theme.radius().control
+    };
+
+    self
+      .grouped
+      .map(|context| context.radius_for(theme))
+      .unwrap_or(standalone_radius)
+  }
+
+  fn resolved_style(&self, theme: &Theme, status: Status) -> Style {
+    let base_style = Style::resolve(theme, self.variant, self.mode, status);
+
+    let mut button_style = if let Some(style) = &self.style {
+      style(theme, status, base_style)
+    } else {
+      base_style
+    };
+
+    button_style.border.radius = self.radius(theme);
+
+    if self.grouped.is_some() {
+      button_style.border.width = 0.0;
+      button_style.border.color = iced::Color::TRANSPARENT;
+      button_style.shadow = theme.shadows().none;
+    }
+
+    button_style
+  }
+
+  fn focused_style(&self, theme: &Theme, status: Status) -> Style {
+    let mut button_style = self.resolved_style(theme, status);
+
+    if button_style.focus_ring.is_none() {
+      button_style = button_style.focused(theme);
+    }
+
+    button_style
   }
 }
 
@@ -125,6 +170,7 @@ where
       style: button.style,
       icon_only,
       pill: button.pill,
+      grouped: button.grouped,
     })
   }
 }
@@ -223,25 +269,7 @@ where
     let state = tree.state.downcast_ref::<State>();
     let bounds = layout.bounds();
     let status = self.status(state, cursor, bounds);
-    let mut button_style = if let Some(style) = &self.style {
-      style(theme, status)
-    } else {
-      Style::resolve(theme, self.variant, self.mode, status)
-    };
-
-    if self.pill {
-      button_style.border.radius = theme.radius().pill;
-    }
-
-    if state.focus == Focus::Visible && status != Status::Disabled {
-      if button_style.focus_ring.is_none() {
-        button_style = button_style.focused(theme);
-      }
-
-      if let Some(focus_ring) = button_style.focus_ring {
-        self.draw_focus_ring(renderer, bounds, button_style.border.radius, focus_ring);
-      }
-    }
+    let button_style = self.resolved_style(theme, status);
 
     if button_style.background.is_some()
       || button_style.border.width > 0.0
@@ -271,6 +299,31 @@ where
       cursor,
       viewport,
     )
+  }
+
+  fn overlay<'b>(
+    &'b mut self,
+    tree: &'b mut Tree,
+    layout: Layout<'b>,
+    _renderer: &Renderer,
+    _viewport: &Rectangle,
+    translation: Vector,
+  ) -> Option<overlay::Element<'b, Message, Theme, Renderer>> {
+    let state = tree.state.downcast_ref::<State>();
+
+    if state.focus != Focus::Visible || self.on_press.is_none() {
+      return None;
+    }
+
+    let mut bounds = layout.bounds();
+    bounds.x += translation.x;
+    bounds.y += translation.y;
+
+    Some(overlay::Element::new(Box::new(FocusRingOverlay {
+      button: self,
+      status: state.status,
+      bounds,
+    })))
   }
 
   fn update(
@@ -391,22 +444,42 @@ where
   }
 }
 
-impl<'a, Message, Renderer> ButtonWidget<'a, Message, Renderer>
+struct FocusRingOverlay<'a, 'b, Message, Renderer> {
+  button: &'b ButtonWidget<'a, Message, Renderer>,
+  status: Status,
+  bounds: Rectangle,
+}
+
+impl<Message, Renderer> overlay::Overlay<Message, Theme, Renderer>
+  for FocusRingOverlay<'_, '_, Message, Renderer>
 where
-  Renderer: RendererTrait,
+  Renderer: renderer::Renderer,
 {
-  fn draw_focus_ring(
+  fn layout(&mut self, _renderer: &Renderer, _bounds: Size) -> layout::Node {
+    layout::Node::new(self.bounds.size()).move_to(self.bounds.position())
+  }
+
+  fn draw(
     &self,
     renderer: &mut Renderer,
-    bounds: Rectangle,
-    radius: iced::border::Radius,
-    focus_ring: super::FocusRing,
+    theme: &Theme,
+    _style: &renderer::Style,
+    layout: Layout<'_>,
+    _cursor: mouse::Cursor,
   ) {
+    let button_style = self.button.focused_style(theme, self.status);
+
+    let Some(focus_ring) = button_style.focus_ring else {
+      return;
+    };
+
     if focus_ring.width <= 0.0 {
       return;
     }
 
     let expansion = focus_ring.offset + focus_ring.width;
+    let radius = button_style.border.radius;
+    let bounds = layout.bounds();
 
     let expanded_radius = iced::border::Radius {
       top_left: radius.top_left + expansion,
@@ -432,6 +505,10 @@ where
       },
       iced::Background::Color(iced::Color::TRANSPARENT),
     );
+  }
+
+  fn index(&self) -> f32 {
+    1.0
   }
 }
 

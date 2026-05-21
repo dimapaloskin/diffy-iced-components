@@ -6,3 +6,4 @@ edition.workspace = true
 [dependencies]
 iced.workspace = true
 diffy-lucide-icons.workspace = true
+derive_setters = "0.1.9"

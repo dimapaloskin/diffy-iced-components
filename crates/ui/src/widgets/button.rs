@@ -4,9 +4,14 @@ mod widget;
 
 use std::borrow::Cow;
 
+use iced::Element;
+use iced::advanced::renderer::Renderer as RendererTrait;
+use iced::advanced::text::Renderer as TextRenderer;
+
 use crate::icon::Icon;
 use crate::size::Density;
 use crate::theme::Theme;
+use crate::widgets::group::{GroupContext, GroupItem, GroupableWidget, group_item};
 
 pub use metrics::Metrics;
 pub use style::*;
@@ -47,6 +52,7 @@ pub struct Button<'a, Message> {
   pub(super) on_press: Option<Message>,
   pub(super) style: Option<StyleFn<'a>>,
   pub(super) pill: bool,
+  pub(super) grouped: Option<GroupContext>,
 }
 
 impl<'a, Message> Button<'a, Message> {
@@ -99,13 +105,58 @@ impl<'a, Message> Button<'a, Message> {
     self
   }
 
-  pub fn style(mut self, style: impl Fn(&Theme, Status) -> Style + 'a) -> Self {
+  pub fn style(mut self, style: impl Fn(&Theme, Status, Style) -> Style + 'a) -> Self {
     self.style = Some(Box::new(style));
     self
   }
 
   pub fn pill(mut self) -> Self {
     self.pill = true;
+    self
+  }
+
+  pub fn fill(mut self) -> Self {
+    self.mode = Mode::Fill;
+    self
+  }
+
+  pub fn light(mut self) -> Self {
+    self.mode = Mode::Light;
+    self
+  }
+
+  pub fn outline(mut self) -> Self {
+    self.mode = Mode::Outline;
+    self
+  }
+
+  pub fn ghost(mut self) -> Self {
+    self.mode = Mode::Ghost;
+    self
+  }
+
+  pub fn primary(mut self) -> Self {
+    self.variant = Variant::Primary;
+    self
+  }
+
+  pub fn neutral(mut self) -> Self {
+    self.variant = Variant::Neutral;
+    self
+  }
+
+  pub fn danger(mut self) -> Self {
+    self.variant = Variant::Danger;
+    self
+  }
+
+  pub(crate) fn with_group_context(mut self, context: GroupContext) -> Self {
+    let metrics = Metrics::from_density(context.density());
+
+    self.metrics = metrics;
+    self.height = iced::Length::Fixed(metrics.height);
+    self.grouped = Some(context);
+
     self
   }
 }
@@ -125,5 +176,28 @@ pub fn button<'a, Message>(content: impl Into<Content<'a>>) -> Button<'a, Messag
     on_press: None,
     style: None,
     pill: false,
+    grouped: None,
+  }
+}
+
+impl<'a, Message, Renderer> GroupableWidget<'a, Message, Renderer> for Button<'a, Message>
+where
+  Message: Clone + 'a,
+  Renderer: RendererTrait + TextRenderer + 'a,
+  <Renderer as TextRenderer>::Font: From<iced::Font>,
+{
+  fn grouped(self: Box<Self>, context: GroupContext) -> Element<'a, Message, Theme, Renderer> {
+    (*self).with_group_context(context).into()
+  }
+}
+
+impl<'a, Message, Renderer> From<Button<'a, Message>> for GroupItem<'a, Message, Renderer>
+where
+  Message: Clone + 'a,
+  Renderer: RendererTrait + TextRenderer + 'a,
+  <Renderer as TextRenderer>::Font: From<iced::Font>,
+{
+  fn from(button: Button<'a, Message>) -> Self {
+    group_item(button)
   }
 }

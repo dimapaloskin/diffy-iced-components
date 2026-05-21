@@ -8,6 +8,11 @@ pub fn tokens(scheme: ColorScheme) -> ThemeTokens {
   }
 }
 
+const FOCUS_TOKENS: FocusTokens = FocusTokens {
+  width: 2.0,
+  offset: 0.0,
+};
+
 fn default_light() -> ThemeTokens {
   ThemeTokens {
     name: "diffy-default-light".into(),
@@ -53,12 +58,9 @@ fn default_light() -> ThemeTokens {
         border: iced::Color::from_rgb8(0xdc, 0x26, 0x26),
       },
 
-      focus_ring: iced::Color::from_rgb8(0x18, 0x18, 0x1b),
+      focus_ring: iced::Color::from_rgba8(0x73, 0x73, 0x73, 0.5),
     },
-    focus: FocusTokens {
-      width: 2.0,
-      offset: 2.0,
-    },
+    focus: FOCUS_TOKENS,
     radius: RadiusTokens {
       none: iced::border::radius(0.0),
       control: iced::border::radius(10.0),
@@ -133,12 +135,9 @@ fn default_dark() -> ThemeTokens {
         border: iced::Color::from_rgb8(0x99, 0x1b, 0x1b),
       },
 
-      focus_ring: iced::Color::from_rgb8(0xfa, 0xfa, 0xfa),
+      focus_ring: iced::Color::from_rgba8(0x73, 0x73, 0x73, 0.5),
     },
-    focus: FocusTokens {
-      width: 2.0,
-      offset: 2.0,
-    },
+    focus: FOCUS_TOKENS,
     radius: RadiusTokens {
       none: iced::border::radius(0.0),
       control: iced::border::radius(10.0),

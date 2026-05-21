@@ -1,6 +1,8 @@
+use derive_setters::Setters;
+
 use crate::size::{Density, PaddingLevel, Sizing};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Setters, Clone, Copy)]
 pub struct Metrics {
   pub height: f32,
   pub font_size: f32,
