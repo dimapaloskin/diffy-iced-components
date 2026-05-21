@@ -1,5 +1,5 @@
 use diffy_ui::widgets::{button, group};
-use diffy_ui::{Icon, Sizing, Theme};
+use diffy_ui::{ColorScheme, Icon, Sizing, Theme};
 
 use iced::Element;
 
@@ -24,5 +24,13 @@ pub fn theme_switcher(
   group(theme_buttons)
     .size(Sizing::Sm)
     .frame_width(4.0)
+    .style(|theme, style| {
+      let color = match theme.scheme() {
+        ColorScheme::Dark => iced::Color::WHITE,
+        ColorScheme::Light => iced::Color::BLACK,
+      };
+
+      style.frame_color(color)
+    })
     .into()
 }
