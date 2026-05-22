@@ -1,3 +1,5 @@
+use diffy_ui::widgets::scrollbar;
+
 use crate::font_lock;
 use crate::gutter::engine as gutter_engine;
 use crate::gutter::{
@@ -16,6 +18,7 @@ pub(crate) struct CodeViewState {
   pub(crate) text_layout: TextLayoutState,
   pub(crate) gutter: GutterState,
   pub(crate) scroll: ScrollModel,
+  pub(crate) scrollbar: scrollbar::State,
   pub(crate) viewport: Viewport,
   pub(crate) pending_measurement_request: Option<MeasurementRequest>,
   pub(crate) last_published_measurement_key: Option<MeasurementKey>,

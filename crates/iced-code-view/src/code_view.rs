@@ -10,6 +10,9 @@ use iced::advanced::widget;
 use iced::advanced::{layout, renderer::Renderer as RendererTrait, widget::Widget};
 use iced::mouse::ScrollDelta;
 
+use diffy_ui::Theme;
+use diffy_ui::widgets::scrollbar;
+
 use crate::document::Document;
 use crate::gutter::{GutterConfig, GutterMetricsRequest, GutterRenderArtifactRequest};
 use crate::insets::CodeViewInsets;
@@ -49,7 +52,7 @@ impl<'a, Message> CodeView<'a, Message> {
   }
 }
 
-impl<'a, Message, Theme, Renderer> Widget<Message, Theme, Renderer> for CodeView<'a, Message>
+impl<'a, Message, Renderer> Widget<Message, Theme, Renderer> for CodeView<'a, Message>
 where
   Renderer: RendererTrait + TextRendererTrait,
 {
@@ -75,15 +78,25 @@ where
     shell: &mut iced::advanced::Shell<'_, Message>,
     _viewport: &iced::Rectangle,
   ) {
-    use iced::mouse::Event as MouseEvent;
+    use iced::Event;
+    use iced::mouse::{Button, Event as MouseEvent};
     use iced::window::Event::RedrawRequested;
 
     match event {
-      iced::Event::Mouse(MouseEvent::WheelScrolled { delta }) => {
+      Event::Window(RedrawRequested(_)) => {
+        self.on_redraw_requested(tree, shell);
+      }
+      Event::Mouse(MouseEvent::WheelScrolled { delta }) => {
         self.on_mouse_wheel(tree, delta, layout, cursor, shell);
       }
-      iced::Event::Window(RedrawRequested(_)) => {
-        self.on_redraw_requested(tree, shell);
+      Event::Mouse(MouseEvent::ButtonPressed(Button::Left)) => {
+        self.on_scrollbar_press(tree, layout, cursor, shell);
+      }
+      Event::Mouse(MouseEvent::CursorMoved { .. }) => {
+        self.on_scrollbar_drag(tree, layout, cursor, shell);
+      }
+      Event::Mouse(MouseEvent::ButtonReleased(Button::Left)) => {
+        self.on_scrollbar_release(tree, shell);
       }
       _ => {}
     }
@@ -117,8 +130,14 @@ where
       .text_layout
       .visible_layout()
       .is_some_and(|entry| entry.key.document_revision != self.inputs.document.revision());
+    let scrollbar_metrics = scrollbar::Metrics::default();
 
-    let viewport = Viewport::new(resolved_size, insets, gutter_metrics);
+    let viewport = Viewport::new(
+      resolved_size,
+      insets,
+      gutter_metrics,
+      scrollbar_metrics.hit_thickness,
+    );
 
     let measurement_request = MeasurementRequest::new(
       document,
@@ -189,7 +208,7 @@ where
     &self,
     tree: &iced::advanced::widget::Tree,
     renderer: &mut Renderer,
-    _theme: &Theme,
+    theme: &Theme,
     _style: &iced::advanced::renderer::Style,
     layout: iced::advanced::Layout<'_>,
     _cursor: iced::advanced::mouse::Cursor,
@@ -234,6 +253,19 @@ where
         clip_bounds,
       });
     }
+
+    let scrollbar_geometry = self.vertical_scrollbar_geometry(state, bounds);
+    let scrollbar_style = scrollbar::Style::resolve(theme);
+
+    renderer.with_layer(bounds, |renderer| {
+      scrollbar::draw(
+        renderer,
+        &scrollbar_geometry,
+        &scrollbar_style,
+        scrollbar::Status::Idle,
+        1.0,
+      );
+    });
   }
 }
 
@@ -247,6 +279,117 @@ impl<'a, Message> CodeView<'a, Message> {
         iced::Vector::new(*x * step, *y * step)
       }
     }
+  }
+
+  fn vertical_scrollbar_geometry(
+    &self,
+    state: &CodeViewState,
+    widget_bounds: iced::Rectangle,
+  ) -> scrollbar::Geometry {
+    let metrics = scrollbar::Metrics::default();
+    let snapshot = state
+      .scroll
+      .vertical_scrollbar_snapshot(state.viewport.scroll_viewport_size().height);
+
+    scrollbar::Geometry::new(snapshot, widget_bounds, metrics)
+  }
+
+  fn apply_scrollbar_update(
+    &self,
+    state: &mut CodeViewState,
+    update: scrollbar::Update,
+    shell: &mut iced::advanced::Shell<'_, Message>,
+  ) {
+    if let Some(action) = update.action {
+      self.apply_scrollbar_action(state, action, shell);
+    }
+
+    if update.capture_event {
+      shell.capture_event();
+    }
+
+    if update.request_redraw {
+      shell.request_redraw();
+    }
+  }
+
+  fn apply_scrollbar_action(
+    &self,
+    state: &mut CodeViewState,
+    action: scrollbar::Action,
+    shell: &mut iced::advanced::Shell<'_, Message>,
+  ) {
+    match action {
+      scrollbar::Action::DragTo {
+        axis: scrollbar::Axis::Vertical,
+        offset,
+      } => match state.scroll.set_vertical_offset_from_px(offset) {
+        Some(ScrollChange::RequiresLayout) => {
+          shell.invalidate_layout();
+          shell.request_redraw();
+        }
+        Some(ScrollChange::RedrawOnly) => {
+          shell.request_redraw();
+        }
+        None => {}
+      },
+      scrollbar::Action::DragTo {
+        axis: scrollbar::Axis::Horizontal,
+        ..
+      }
+      | scrollbar::Action::TrackPress { .. } => {}
+    }
+  }
+
+  fn on_scrollbar_press(
+    &mut self,
+    tree: &mut widget::Tree,
+    layout: layout::Layout<'_>,
+    cursor: iced::advanced::mouse::Cursor,
+    shell: &mut iced::advanced::Shell<'_, Message>,
+  ) {
+    let Some(cursor_position) = cursor.position() else {
+      return;
+    };
+
+    let state = tree.state.downcast_mut::<CodeViewState>();
+    let geometry = self.vertical_scrollbar_geometry(state, layout.bounds());
+    let update = state.scrollbar.press(cursor_position, &geometry);
+
+    self.apply_scrollbar_update(state, update, shell);
+  }
+
+  fn on_scrollbar_drag(
+    &mut self,
+    tree: &mut widget::Tree,
+    layout: layout::Layout<'_>,
+    cursor: iced::advanced::mouse::Cursor,
+    shell: &mut iced::advanced::Shell<'_, Message>,
+  ) {
+    let state = tree.state.downcast_mut::<CodeViewState>();
+    if !state.scrollbar.is_dragging() {
+      return;
+    }
+
+    let Some(cursor_position) = cursor.position() else {
+      return;
+    };
+
+    let geometry = self.vertical_scrollbar_geometry(state, layout.bounds());
+    let update = state.scrollbar.drag_to(cursor_position, &geometry);
+
+    self.apply_scrollbar_update(state, update, shell);
+  }
+
+  fn on_scrollbar_release(
+    &mut self,
+    tree: &mut widget::Tree,
+    shell: &mut iced::advanced::Shell<'_, Message>,
+  ) {
+    let state = tree.state.downcast_mut::<CodeViewState>();
+    let update = state.scrollbar.release();
+
+    self.apply_scrollbar_update(state, update, shell);
   }
 
   fn on_mouse_wheel(
@@ -296,11 +439,9 @@ impl<'a, Message> CodeView<'a, Message> {
   }
 }
 
-impl<'a, Message, Theme, Renderer> From<CodeView<'a, Message>>
-  for Element<'a, Message, Theme, Renderer>
+impl<'a, Message, Renderer> From<CodeView<'a, Message>> for Element<'a, Message, Theme, Renderer>
 where
   Message: 'a,
-  Theme: 'a,
   Renderer: 'a + RendererTrait + TextRendererTrait,
 {
   fn from(code_view: CodeView<'a, Message>) -> Self {

@@ -13,6 +13,30 @@ const FOCUS_TOKENS: FocusTokens = FocusTokens {
   offset: 0.0,
 };
 
+fn scrollbar_tokens(thumb: iced::Color, track: iced::Color) -> ScrollbarTokens {
+  ScrollbarTokens {
+    idle: ScrollbarStateTokens {
+      thumb: with_alpha(thumb, 0.38),
+      track: iced::Color::TRANSPARENT,
+    },
+    hovered: ScrollbarStateTokens {
+      thumb: with_alpha(thumb, 0.56),
+      track: with_alpha(track, 0.18),
+    },
+    pressed: ScrollbarStateTokens {
+      thumb: with_alpha(thumb, 0.72),
+      track: with_alpha(track, 0.24),
+    },
+  }
+}
+
+fn with_alpha(color: iced::Color, alpha: f32) -> iced::Color {
+  iced::Color {
+    a: alpha.clamp(0.0, 1.0),
+    ..color
+  }
+}
+
 fn default_light() -> ThemeTokens {
   ThemeTokens {
     name: "diffy-default-light".into(),
@@ -66,6 +90,7 @@ fn default_light() -> ThemeTokens {
       control: iced::border::radius(10.0),
       surface: iced::border::radius(14.0),
       pill: iced::border::radius(999.0),
+      scrollbar: iced::border::radius(999.0),
     },
     shadows: ShadowTokens {
       none: iced::Shadow::default(),
@@ -87,6 +112,10 @@ fn default_light() -> ThemeTokens {
       },
       pill: iced::Shadow::default(),
     },
+    scrollbar: scrollbar_tokens(
+      iced::Color::from_rgb8(0x71, 0x71, 0x7a),
+      iced::Color::from_rgb8(0xf4, 0xf4, 0xf5),
+    ),
   }
 }
 
@@ -143,6 +172,7 @@ fn default_dark() -> ThemeTokens {
       control: iced::border::radius(10.0),
       surface: iced::border::radius(14.0),
       pill: iced::border::radius(999.0),
+      scrollbar: iced::border::radius(999.0),
     },
     shadows: ShadowTokens {
       none: iced::Shadow::default(),
@@ -164,5 +194,9 @@ fn default_dark() -> ThemeTokens {
       },
       pill: iced::Shadow::default(),
     },
+    scrollbar: scrollbar_tokens(
+      iced::Color::from_rgb8(0xa1, 0xa1, 0xaa),
+      iced::Color::from_rgb8(0x18, 0x18, 0x1b),
+    ),
   }
 }

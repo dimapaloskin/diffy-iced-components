@@ -27,6 +27,7 @@ impl Viewport {
     widget_size: iced::Size,
     insets: CodeViewInsets,
     gutter: GutterMetrics,
+    right_chrome_reserve: f32,
   ) -> Self {
     let surface_width = widget_size.width.max(0.0);
     let surface_height = widget_size.height.max(0.0);
@@ -46,6 +47,10 @@ impl Viewport {
       0.0
     };
 
+    let right_chrome_reserve = right_chrome_reserve
+      .max(0.0)
+      .min((surface_width - gutter_width).max(0.0));
+
     let gutter = (gutter_width > 0.0).then_some(ViewportArea {
       bounds: iced::Rectangle {
         x: surface_bounds.x,
@@ -64,7 +69,7 @@ impl Viewport {
     let text_bounds = iced::Rectangle {
       x: surface_bounds.x + gutter_width,
       y: surface_bounds.y,
-      width: (surface_width - gutter_width).max(0.0),
+      width: (surface_width - gutter_width - right_chrome_reserve).max(0.0),
       height: surface_bounds.height,
     };
 
@@ -132,6 +137,7 @@ mod tests {
         HorizontalInsets::new(13.0, 7.0),
       ),
       gutter_metrics(),
+      0.0,
     );
 
     assert_eq!(
@@ -188,6 +194,7 @@ mod tests {
         requested_width: 100.0,
         ..gutter_metrics()
       },
+      0.0,
     );
 
     assert_eq!(
@@ -227,5 +234,48 @@ mod tests {
     );
 
     assert_eq!(viewport.scroll_viewport_size(), iced::Size::new(0.0, 35.0));
+  }
+
+  #[test]
+  fn right_chrome_reserve_reduces_text_area_without_touching_gutter() {
+    let viewport = Viewport::new(
+      iced::Size::new(200.0, 100.0),
+      CodeViewInsets::new(
+        VerticalInsets::new(5.0, 11.0),
+        HorizontalInsets::new(13.0, 7.0),
+      ),
+      gutter_metrics(),
+      14.0,
+    );
+
+    assert_eq!(
+      viewport.gutter.expect("gutter should stay enabled").bounds,
+      iced::Rectangle {
+        x: 0.0,
+        y: 0.0,
+        width: 40.0,
+        height: 100.0,
+      }
+    );
+
+    assert_eq!(
+      viewport.text.bounds,
+      iced::Rectangle {
+        x: 40.0,
+        y: 0.0,
+        width: 146.0,
+        height: 100.0,
+      }
+    );
+
+    assert_eq!(
+      viewport.text.content_bounds,
+      iced::Rectangle {
+        x: 53.0,
+        y: 5.0,
+        width: 126.0,
+        height: 84.0,
+      }
+    );
   }
 }

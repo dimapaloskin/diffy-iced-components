@@ -5,6 +5,7 @@ use std::time::Duration;
 use iced::{Element, Length, Task};
 
 use diffy_iced_runtime::debounce::{DebounceAction, DebounceToken, Debouncer};
+use diffy_ui::Theme;
 
 use crate::background;
 use crate::code_view::{CodeView, CodeViewInputs};
@@ -460,9 +461,8 @@ impl CodeViewController {
     }
   }
 
-  pub fn view<'a, Theme, Renderer>(&'a self) -> Element<'a, CodeViewMessage, Theme, Renderer>
+  pub fn view<'a, Renderer>(&'a self) -> Element<'a, CodeViewMessage, Theme, Renderer>
   where
-    Theme: 'a,
     Renderer: 'a + iced::advanced::renderer::Renderer + iced::advanced::graphics::text::Renderer,
   {
     CodeView::new(self.widget_inputs(), CodeViewMessage::measurement_requested).into()

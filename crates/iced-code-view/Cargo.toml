@@ -8,4 +8,5 @@ cosmic-text = { version = "=0.19.0", features = ["shape-run-cache"] }
 memchr = "2.8.0"
 
 diffy-iced-runtime.workspace = true
+diffy-ui.workspace = true
 iced.workspace = true

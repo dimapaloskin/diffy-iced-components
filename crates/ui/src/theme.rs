@@ -2,7 +2,10 @@ pub mod catalog;
 pub mod presets;
 pub mod tokens;
 
-pub use tokens::{BorderTokens, ColorTokens, FamilyTone, FocusTokens, RadiusTokens, ShadowTokens};
+pub use tokens::{
+  BorderTokens, ColorTokens, FamilyTone, FocusTokens, RadiusTokens, ScrollbarStateTokens,
+  ScrollbarTokens, ShadowTokens,
+};
 
 use std::borrow::Cow;
 
@@ -30,6 +33,7 @@ pub struct ThemeTokens {
   pub focus: FocusTokens,
   pub radius: RadiusTokens,
   pub shadows: ShadowTokens,
+  pub scrollbar: ScrollbarTokens,
 }
 
 #[derive(Debug, Clone)]
@@ -89,6 +93,10 @@ impl Theme {
 
   pub fn shadows(&self) -> &ShadowTokens {
     &self.tokens.shadows
+  }
+
+  pub fn scrollbar(&self) -> &ScrollbarTokens {
+    &self.tokens.scrollbar
   }
 }
 

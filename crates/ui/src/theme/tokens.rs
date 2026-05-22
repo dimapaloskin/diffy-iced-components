@@ -46,6 +46,7 @@ pub struct RadiusTokens {
   pub control: iced::border::Radius,
   pub surface: iced::border::Radius,
   pub pill: iced::border::Radius,
+  pub scrollbar: iced::border::Radius,
 }
 
 #[derive(Debug, Clone)]
@@ -58,4 +59,17 @@ pub struct ShadowTokens {
 
   pub surface: iced::Shadow,
   pub pill: iced::Shadow,
+}
+
+#[derive(Debug, Clone)]
+pub struct ScrollbarStateTokens {
+  pub thumb: iced::Color,
+  pub track: iced::Color,
+}
+
+#[derive(Debug, Clone)]
+pub struct ScrollbarTokens {
+  pub idle: ScrollbarStateTokens,
+  pub hovered: ScrollbarStateTokens,
+  pub pressed: ScrollbarStateTokens,
 }

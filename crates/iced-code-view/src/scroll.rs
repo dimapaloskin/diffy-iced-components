@@ -3,6 +3,8 @@ mod vertical_scroll;
 
 use iced::advanced::graphics::text::cosmic_text;
 
+use diffy_ui::widgets::scrollbar;
+
 pub(crate) use geometry::{GeometryInputs, ScrollGeometry};
 pub(crate) use vertical_scroll::VerticalScroll;
 
@@ -121,6 +123,72 @@ impl ScrollModel {
         Some(ScrollChange::RequiresLayout)
       }
     }
+  }
+
+  pub(crate) fn vertical_scrollbar_snapshot(
+    &self,
+    viewport_height: f32,
+  ) -> scrollbar::AxisSnapshot {
+    let viewport_len = viewport_height.max(0.0) as f64;
+
+    match &self.geometry.vertical {
+      geometry::VerticalGeometry::Trivial {
+        source_line_count,
+        line_height,
+      } => {
+        let line_height = *line_height as f64;
+        let offset = self.state.vertical.source_line_index as f64 * line_height
+          + self.state.vertical.y_inside_source_line as f64;
+
+        scrollbar::AxisSnapshot {
+          axis: scrollbar::Axis::Vertical,
+          offset,
+          viewport_len,
+          extent: scrollbar::ScrollExtent::Exact {
+            content_len: *source_line_count as f64 * line_height,
+          },
+        }
+      }
+      geometry::VerticalGeometry::Wrapped(_) => scrollbar::AxisSnapshot {
+        axis: scrollbar::Axis::Vertical,
+        offset: 0.0,
+        viewport_len,
+        extent: scrollbar::ScrollExtent::Unknown,
+      },
+    }
+  }
+
+  pub(crate) fn set_vertical_offset_from_px(&mut self, offset_px: f64) -> Option<ScrollChange> {
+    let geometry::VerticalGeometry::Trivial {
+      source_line_count,
+      line_height,
+    } = self.geometry.vertical
+    else {
+      return None;
+    };
+
+    if source_line_count == 0 || line_height <= 0.0 {
+      return None;
+    }
+
+    let max_offset = source_line_count.saturating_sub(1) as f64 * f64::from(line_height);
+    let offset_px = offset_px.clamp(0.0, max_offset);
+
+    let source_line_index = (offset_px / f64::from(line_height)).floor() as usize;
+    let y_inside_source_line =
+      (offset_px - source_line_index as f64 * f64::from(line_height)) as f32;
+
+    let target = VerticalScroll {
+      source_line_index,
+      y_inside_source_line,
+    };
+
+    if target == self.state.vertical {
+      return None;
+    }
+
+    self.state.vertical = target;
+    Some(ScrollChange::RequiresLayout)
   }
 }
 
