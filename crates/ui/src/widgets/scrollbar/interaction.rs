@@ -1,6 +1,8 @@
 use iced::Point;
 
-use super::{Action, Axis, Geometry};
+use crate::widgets::scrollbar::TrackPressRegion;
+
+use super::{Action, Axis, Geometry, ThumbGeometry};
 
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub struct State {
@@ -21,10 +23,23 @@ impl State {
       return Update::ignored();
     };
 
-    if !thumb.hit_bounds.contains(cursor_position) {
-      return Update::ignored();
+    if thumb.hit_bounds.contains(cursor_position) {
+      return self.thumb_press(&thumb, cursor_position, geometry);
     }
 
+    if geometry.track_bounds.contains(cursor_position) {
+      return self.track_press(&thumb, cursor_position, geometry);
+    }
+
+    Update::ignored()
+  }
+
+  fn thumb_press(
+    &mut self,
+    thumb: &ThumbGeometry,
+    cursor_position: Point,
+    geometry: &Geometry,
+  ) -> Update {
     let axis = geometry.axis;
 
     let grab_offset =
@@ -34,6 +49,48 @@ impl State {
 
     Update {
       action: None,
+      capture_event: true,
+      request_redraw: true,
+    }
+  }
+
+  fn track_press(
+    &mut self,
+    thumb: &ThumbGeometry,
+    cursor_position: Point,
+    geometry: &Geometry,
+  ) -> Update {
+    let axis = geometry.axis;
+
+    let track_len = Self::axis_len(axis, geometry.track_bounds);
+    if track_len <= 0.0 {
+      return Update::ignored();
+    }
+
+    let pointer_offset =
+      Self::axis_position(axis, cursor_position) - Self::axis_start(axis, geometry.track_bounds);
+    let pointer_offset = pointer_offset.clamp(0.0, track_len) as f64;
+    let track_ratio = pointer_offset / track_len as f64;
+
+    let region =
+      if Self::axis_position(axis, cursor_position) < Self::axis_start(axis, thumb.hit_bounds) {
+        TrackPressRegion::BeforeThumb
+      } else {
+        TrackPressRegion::AfterThumb
+      };
+
+    self.interaction = Interaction::Dragging {
+      axis,
+      grab_offset: thumb.len / 2.0,
+    };
+
+    Update {
+      action: Some(Action::TrackPress {
+        axis,
+        region,
+        track_ratio,
+        pointer_offset,
+      }),
       capture_event: true,
       request_redraw: true,
     }
@@ -68,16 +125,17 @@ impl State {
   }
 
   pub fn release(&mut self) -> Update {
-    if !self.is_dragging() {
-      return Update::ignored();
-    }
+    match self.interaction {
+      Interaction::Idle => Update::ignored(),
+      Interaction::Dragging { .. } => {
+        self.interaction = Interaction::Idle;
 
-    self.interaction = Interaction::Idle;
-
-    Update {
-      action: None,
-      capture_event: true,
-      request_redraw: true,
+        Update {
+          action: None,
+          capture_event: true,
+          request_redraw: true,
+        }
+      }
     }
   }
 
@@ -92,6 +150,13 @@ impl State {
     match axis {
       Axis::Vertical => bounds.y,
       Axis::Horizontal => bounds.x,
+    }
+  }
+
+  fn axis_len(axis: Axis, bounds: iced::Rectangle) -> f32 {
+    match axis {
+      Axis::Vertical => bounds.height,
+      Axis::Horizontal => bounds.width,
     }
   }
 }

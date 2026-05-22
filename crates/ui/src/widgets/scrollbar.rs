@@ -45,6 +45,15 @@ pub enum Action {
   },
 }
 
+impl Action {
+  pub fn axis(&self) -> Axis {
+    match self {
+      Action::DragTo { axis, .. } => *axis,
+      Action::TrackPress { axis, .. } => *axis,
+    }
+  }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TrackPressRegion {
   BeforeThumb,

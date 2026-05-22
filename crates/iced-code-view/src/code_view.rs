@@ -298,10 +298,11 @@ impl<'a, Message> CodeView<'a, Message> {
     &self,
     state: &mut CodeViewState,
     update: scrollbar::Update,
+    geometry: Option<&scrollbar::Geometry>,
     shell: &mut iced::advanced::Shell<'_, Message>,
   ) {
     if let Some(action) = update.action {
-      self.apply_scrollbar_action(state, action, shell);
+      self.apply_scrollbar_action(state, action, geometry, shell);
     }
 
     if update.capture_event {
@@ -317,27 +318,63 @@ impl<'a, Message> CodeView<'a, Message> {
     &self,
     state: &mut CodeViewState,
     action: scrollbar::Action,
+    geometry: Option<&scrollbar::Geometry>,
     shell: &mut iced::advanced::Shell<'_, Message>,
   ) {
-    match action {
-      scrollbar::Action::DragTo {
-        axis: scrollbar::Axis::Vertical,
-        offset,
-      } => match state.scroll.set_vertical_offset_from_px(offset) {
-        Some(ScrollChange::RequiresLayout) => {
-          shell.invalidate_layout();
-          shell.request_redraw();
-        }
-        Some(ScrollChange::RedrawOnly) => {
-          shell.request_redraw();
-        }
-        None => {}
-      },
-      scrollbar::Action::DragTo {
-        axis: scrollbar::Axis::Horizontal,
-        ..
+    match action.axis() {
+      scrollbar::Axis::Vertical => {
+        self.apply_vertical_scrollbar_action(state, action, geometry, shell);
       }
-      | scrollbar::Action::TrackPress { .. } => {}
+      scrollbar::Axis::Horizontal => {}
+    }
+  }
+
+  fn apply_vertical_scrollbar_action(
+    &self,
+    state: &mut CodeViewState,
+    action: scrollbar::Action,
+    geometry: Option<&scrollbar::Geometry>,
+    shell: &mut iced::advanced::Shell<'_, Message>,
+  ) {
+    use scrollbar::{Action, Geometry};
+
+    match action {
+      Action::DragTo { offset, .. } => {
+        self.apply_vertical_scrollbar_offset(state, offset, shell);
+      }
+      Action::TrackPress { pointer_offset, .. } => {
+        let Some(Geometry {
+          thumb: Some(thumb), ..
+        }) = geometry
+        else {
+          return;
+        };
+
+        let target_thumb_start = pointer_offset as f32 - thumb.len / 2.0;
+        let Some(offset) = thumb.offset_for_thumb_start(target_thumb_start) else {
+          return;
+        };
+
+        self.apply_vertical_scrollbar_offset(state, offset, shell);
+      }
+    }
+  }
+
+  fn apply_vertical_scrollbar_offset(
+    &self,
+    state: &mut CodeViewState,
+    offset: f64,
+    shell: &mut iced::advanced::Shell<'_, Message>,
+  ) {
+    match state.scroll.set_vertical_offset_from_px(offset) {
+      Some(ScrollChange::RequiresLayout) => {
+        shell.invalidate_layout();
+        shell.request_redraw();
+      }
+      Some(ScrollChange::RedrawOnly) => {
+        shell.request_redraw();
+      }
+      None => {}
     }
   }
 
@@ -356,7 +393,7 @@ impl<'a, Message> CodeView<'a, Message> {
     let geometry = self.vertical_scrollbar_geometry(state, layout.bounds());
     let update = state.scrollbar.press(cursor_position, &geometry);
 
-    self.apply_scrollbar_update(state, update, shell);
+    self.apply_scrollbar_update(state, update, Some(&geometry), shell);
   }
 
   fn on_scrollbar_drag(
@@ -378,7 +415,7 @@ impl<'a, Message> CodeView<'a, Message> {
     let geometry = self.vertical_scrollbar_geometry(state, layout.bounds());
     let update = state.scrollbar.drag_to(cursor_position, &geometry);
 
-    self.apply_scrollbar_update(state, update, shell);
+    self.apply_scrollbar_update(state, update, Some(&geometry), shell);
   }
 
   fn on_scrollbar_release(
@@ -389,7 +426,7 @@ impl<'a, Message> CodeView<'a, Message> {
     let state = tree.state.downcast_mut::<CodeViewState>();
     let update = state.scrollbar.release();
 
-    self.apply_scrollbar_update(state, update, shell);
+    self.apply_scrollbar_update(state, update, None, shell);
   }
 
   fn on_mouse_wheel(
