@@ -1,11 +1,11 @@
-mod geometry;
+mod map;
 mod vertical_scroll;
 
 use iced::advanced::graphics::text::cosmic_text;
 
 use diffy_ui::widgets::scrollbar;
 
-pub(crate) use geometry::{GeometryInputs, ScrollGeometry};
+pub(crate) use map::{ScrollMap, ScrollMapInputs};
 pub(crate) use vertical_scroll::VerticalScroll;
 
 use crate::measurement::MeasurementResult;
@@ -42,7 +42,7 @@ pub(crate) enum ScrollChange {
 
 pub(crate) struct ScrollModel {
   state: ScrollState,
-  geometry: ScrollGeometry,
+  map: ScrollMap,
 }
 
 impl ScrollModel {
@@ -54,14 +54,14 @@ impl ScrollModel {
     self.state.horizontal_px
   }
 
-  pub(crate) fn reset(&mut self, inputs: GeometryInputs) {
+  pub(crate) fn reset(&mut self, inputs: ScrollMapInputs) {
     self.state = ScrollState::ZERO;
-    self.geometry = ScrollGeometry::default();
-    self.geometry.reconcile(&inputs);
+    self.map = ScrollMap::default();
+    self.map.reconcile(&inputs);
   }
 
-  pub(crate) fn reconcile(&mut self, inputs: GeometryInputs, viewport_size: iced::Size) {
-    self.geometry.reconcile(&inputs);
+  pub(crate) fn reconcile(&mut self, inputs: ScrollMapInputs, viewport_size: iced::Size) {
+    self.map.reconcile(&inputs);
     self.clamp_horizontal(viewport_size);
   }
 
@@ -70,13 +70,13 @@ impl ScrollModel {
     result: &MeasurementResult,
     viewport_size: iced::Size,
   ) {
-    self.geometry.apply_measurement_result(result);
+    self.map.apply_measurement_result(result);
     self.clamp_horizontal(viewport_size);
   }
 
   fn clamp_horizontal(&mut self, viewport_size: iced::Size) {
     self.state.horizontal_px = self
-      .geometry
+      .map
       .horizontal
       .clamp_offset(self.state.horizontal_px, viewport_size.width);
   }
@@ -100,7 +100,7 @@ impl ScrollModel {
     }
 
     let horizontal_px = self
-      .geometry
+      .map
       .horizontal
       .clamp_offset(self.state.horizontal_px - delta.x, scroll_viewport.width);
 
@@ -131,8 +131,8 @@ impl ScrollModel {
   ) -> scrollbar::AxisSnapshot {
     let viewport_len = viewport_height.max(0.0) as f64;
 
-    match &self.geometry.vertical {
-      geometry::VerticalGeometry::Trivial {
+    match &self.map.vertical {
+      map::VerticalMap::Trivial {
         source_line_count,
         line_height,
       } => {
@@ -149,7 +149,7 @@ impl ScrollModel {
           },
         }
       }
-      geometry::VerticalGeometry::Wrapped(_) => scrollbar::AxisSnapshot {
+      map::VerticalMap::Wrapped(_) => scrollbar::AxisSnapshot {
         axis: scrollbar::Axis::Vertical,
         offset: 0.0,
         viewport_len,
@@ -159,10 +159,10 @@ impl ScrollModel {
   }
 
   pub(crate) fn set_vertical_offset_from_px(&mut self, offset_px: f64) -> Option<ScrollChange> {
-    let geometry::VerticalGeometry::Trivial {
+    let map::VerticalMap::Trivial {
       source_line_count,
       line_height,
-    } = self.geometry.vertical
+    } = self.map.vertical
     else {
       return None;
     };
@@ -196,7 +196,7 @@ impl Default for ScrollModel {
   fn default() -> Self {
     Self {
       state: ScrollState::ZERO,
-      geometry: ScrollGeometry::default(),
+      map: ScrollMap::default(),
     }
   }
 }
@@ -208,8 +208,8 @@ mod tests {
 
   use super::*;
 
-  pub(crate) fn test_inputs(mode: WrapMode) -> GeometryInputs {
-    GeometryInputs {
+  pub(crate) fn test_inputs(mode: WrapMode) -> ScrollMapInputs {
+    ScrollMapInputs {
       source_line_count: 0,
       mode,
       line_height: 18.0,

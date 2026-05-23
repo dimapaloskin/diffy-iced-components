@@ -8,8 +8,9 @@ use iced::Element;
 use iced::Length;
 use iced::advanced::graphics::text;
 use iced::advanced::graphics::text::Renderer as TextRendererTrait;
-use iced::advanced::widget;
-use iced::advanced::{layout, renderer::Renderer as RendererTrait, widget::Widget};
+use iced::advanced::layout;
+use iced::advanced::renderer::Renderer as RendererTrait;
+use iced::advanced::widget::{self, Tree, Widget};
 use iced::mouse::ScrollDelta;
 
 use diffy_ui::Theme;
@@ -18,7 +19,7 @@ use crate::document::Document;
 use crate::gutter::{GutterConfig, GutterMetricsRequest, GutterRenderArtifactRequest};
 use crate::insets::CodeViewInsets;
 use crate::measurement::{MeasurementRequest, MeasurementResult};
-use crate::scroll::GeometryInputs;
+use crate::scroll::ScrollMapInputs;
 use crate::state::CodeViewState;
 use crate::style::CodeViewStyle;
 use crate::text_layout::{TextLayoutConfig, TextLayoutRequest};
@@ -74,7 +75,7 @@ where
 
   fn update(
     &mut self,
-    tree: &mut widget::Tree,
+    tree: &mut Tree,
     event: &iced::Event,
     layout: layout::Layout<'_>,
     cursor: iced::advanced::mouse::Cursor,
@@ -114,7 +115,7 @@ where
 
   fn layout(
     &mut self,
-    tree: &mut iced::advanced::widget::Tree,
+    tree: &mut Tree,
     _renderer: &Renderer,
     limits: &iced::advanced::layout::Limits,
   ) -> layout::Node {
@@ -159,7 +160,7 @@ where
     let measurement_result =
       state.update_pending_measurement(measurement_request, measurement_result);
 
-    let geometry_inputs = GeometryInputs {
+    let map_inputs = ScrollMapInputs {
       source_line_count: document.line_count(),
       mode: text_layout_config.wrap_mode,
       line_height: text_layout_config.line_height,
@@ -168,11 +169,9 @@ where
 
     let scroll_viewport_size = viewport.scroll_viewport_size();
     if document_changed {
-      state.scroll.reset(geometry_inputs);
+      state.scroll.reset(map_inputs);
     } else {
-      state
-        .scroll
-        .reconcile(geometry_inputs, scroll_viewport_size);
+      state.scroll.reconcile(map_inputs, scroll_viewport_size);
     }
 
     if let Some(result) = measurement_result {
@@ -216,7 +215,7 @@ where
 
   fn draw(
     &self,
-    tree: &iced::advanced::widget::Tree,
+    tree: &Tree,
     renderer: &mut Renderer,
     theme: &Theme,
     _style: &iced::advanced::renderer::Style,
@@ -283,7 +282,7 @@ impl<'a, Message> CodeView<'a, Message> {
 
   fn on_mouse_wheel(
     &mut self,
-    tree: &mut widget::Tree,
+    tree: &mut Tree,
     delta: &ScrollDelta,
     layout: layout::Layout<'_>,
     cursor: iced::advanced::mouse::Cursor,
@@ -309,7 +308,7 @@ impl<'a, Message> CodeView<'a, Message> {
 
   fn on_redraw_requested(
     &mut self,
-    tree: &mut widget::Tree,
+    tree: &mut Tree,
     shell: &mut iced::advanced::Shell<'_, Message>,
   ) {
     let state = tree.state.downcast_mut::<CodeViewState>();

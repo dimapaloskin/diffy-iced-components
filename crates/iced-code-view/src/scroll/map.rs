@@ -3,7 +3,7 @@ use crate::measurement::MeasurementKey;
 use crate::measurement::{MeasurementOutput, MeasurementResult};
 
 #[derive(Debug, Clone)]
-pub(crate) struct GeometryInputs {
+pub(crate) struct ScrollMapInputs {
   pub(crate) source_line_count: usize,
   pub(crate) mode: WrapMode,
   pub(crate) line_height: f32,
@@ -11,13 +11,13 @@ pub(crate) struct GeometryInputs {
 }
 
 #[derive(Debug, Default, Clone, PartialEq)]
-pub(crate) struct ScrollGeometry {
-  pub(super) horizontal: HorizontalGeometry,
-  pub(super) vertical: VerticalGeometry,
+pub(crate) struct ScrollMap {
+  pub(super) horizontal: HorizontalMap,
+  pub(super) vertical: VerticalMap,
 }
 
-impl ScrollGeometry {
-  pub(crate) fn reconcile(&mut self, inputs: &GeometryInputs) {
+impl ScrollMap {
+  pub(crate) fn reconcile(&mut self, inputs: &ScrollMapInputs) {
     self.horizontal.reconcile(inputs);
     self.vertical.reconcile(inputs);
   }
@@ -29,7 +29,7 @@ impl ScrollGeometry {
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
-pub(super) enum HorizontalGeometry {
+pub(super) enum HorizontalMap {
   #[default]
   Disabled,
   Unknown {
@@ -41,12 +41,12 @@ pub(super) enum HorizontalGeometry {
   },
 }
 
-impl HorizontalGeometry {
+impl HorizontalMap {
   pub(super) fn clamp_offset(&self, offset: f32, viewport_width: f32) -> f32 {
     match self {
-      HorizontalGeometry::Unknown { .. } => offset.max(0.0),
-      HorizontalGeometry::Disabled => 0.0,
-      HorizontalGeometry::Exact { content_width, .. } => {
+      HorizontalMap::Unknown { .. } => offset.max(0.0),
+      HorizontalMap::Disabled => 0.0,
+      HorizontalMap::Exact { content_width, .. } => {
         let max = (*content_width - viewport_width).max(0.0);
         offset.clamp(0.0, max)
       }
@@ -60,7 +60,7 @@ impl HorizontalGeometry {
     }
   }
 
-  fn reconcile(&mut self, inputs: &GeometryInputs) {
+  fn reconcile(&mut self, inputs: &ScrollMapInputs) {
     match inputs.mode {
       WrapMode::SoftWrap => *self = Self::Disabled,
       WrapMode::NoWrap => {
@@ -90,15 +90,15 @@ impl HorizontalGeometry {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub(super) enum VerticalGeometry {
+pub(super) enum VerticalMap {
   Trivial {
     source_line_count: usize,
     line_height: f32,
   },
-  Wrapped(WrappedVerticalGeometry),
+  Wrapped(WrappedVerticalMap),
 }
 
-impl Default for VerticalGeometry {
+impl Default for VerticalMap {
   fn default() -> Self {
     Self::Trivial {
       source_line_count: 0,
@@ -107,8 +107,8 @@ impl Default for VerticalGeometry {
   }
 }
 
-impl VerticalGeometry {
-  fn reconcile(&mut self, inputs: &GeometryInputs) {
+impl VerticalMap {
+  fn reconcile(&mut self, inputs: &ScrollMapInputs) {
     match (inputs.mode, &*self) {
       (
         WrapMode::NoWrap,
@@ -124,25 +124,25 @@ impl VerticalGeometry {
           line_height: inputs.line_height,
         }
       }
-      (WrapMode::SoftWrap, Self::Wrapped(geo))
-        if geo.measurement_key == inputs.measurement_key
-          && geo.source_line_count == inputs.source_line_count =>
+      (WrapMode::SoftWrap, Self::Wrapped(map))
+        if map.measurement_key == inputs.measurement_key
+          && map.source_line_count == inputs.source_line_count =>
       { /* no-op */ }
-      (WrapMode::SoftWrap, _) => *self = Self::Wrapped(WrappedVerticalGeometry::unmeasured(inputs)),
+      (WrapMode::SoftWrap, _) => *self = Self::Wrapped(WrappedVerticalMap::unmeasured(inputs)),
     }
   }
 
   fn apply_measurement_result(&mut self, result: &MeasurementResult) {
-    let Self::Wrapped(geometry) = self else {
+    let Self::Wrapped(map) = self else {
       return;
     };
 
-    geometry.apply_measurement_result(result);
+    map.apply_measurement_result(result);
   }
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) struct WrappedVerticalGeometry {
+pub(crate) struct WrappedVerticalMap {
   pub(super) measurement_key: MeasurementKey,
   pub(super) source_line_count: usize,
   pub(super) line_height: f32,
@@ -150,8 +150,8 @@ pub(crate) struct WrappedVerticalGeometry {
   pub(super) measured_line_count: usize,
 }
 
-impl WrappedVerticalGeometry {
-  fn unmeasured(inputs: &GeometryInputs) -> Self {
+impl WrappedVerticalMap {
+  fn unmeasured(inputs: &ScrollMapInputs) -> Self {
     Self {
       measurement_key: inputs.measurement_key,
       source_line_count: inputs.source_line_count,
@@ -253,8 +253,8 @@ mod tests {
     source_line_count: usize,
     line_height: f32,
     key: MeasurementKey,
-  ) -> GeometryInputs {
-    GeometryInputs {
+  ) -> ScrollMapInputs {
+    ScrollMapInputs {
       source_line_count,
       mode: WrapMode::SoftWrap,
       line_height,
@@ -266,44 +266,44 @@ mod tests {
     MeasurementResult::soft_wrap_line_heights(key, Arc::from(counts))
   }
 
-  fn wrapped_geometry(geometry: &ScrollGeometry) -> &WrappedVerticalGeometry {
-    let VerticalGeometry::Wrapped(wrapped) = &geometry.vertical else {
-      panic!("expected wrapped vertical geometry");
+  fn wrapped_map(map: &ScrollMap) -> &WrappedVerticalMap {
+    let VerticalMap::Wrapped(wrapped) = &map.vertical else {
+      panic!("expected wrapped vertical map");
     };
 
     wrapped
   }
 
   #[test]
-  fn unknown_horizontal_geometry_clamps_only_to_zero() {
-    let geo = HorizontalGeometry::Unknown {
+  fn unknown_horizontal_map_clamps_only_to_zero() {
+    let map = HorizontalMap::Unknown {
       key: test_measurement_key(),
     };
 
-    assert_eq!(geo.clamp_offset(-10.0, 300.0), 0.0);
-    assert_eq!(geo.clamp_offset(50.0, 300.0), 50.0);
+    assert_eq!(map.clamp_offset(-10.0, 300.0), 0.0);
+    assert_eq!(map.clamp_offset(50.0, 300.0), 50.0);
   }
 
   #[test]
-  fn not_scrollable_horizontal_geometry_always_clamps_to_zero() {
-    let geo = HorizontalGeometry::Disabled;
+  fn not_scrollable_horizontal_map_always_clamps_to_zero() {
+    let map = HorizontalMap::Disabled;
 
-    assert_eq!(geo.clamp_offset(-10.0, 300.0), 0.0);
-    assert_eq!(geo.clamp_offset(50.0, 300.0), 0.0);
+    assert_eq!(map.clamp_offset(-10.0, 300.0), 0.0);
+    assert_eq!(map.clamp_offset(50.0, 300.0), 0.0);
   }
 
   #[test]
-  fn exact_horizontal_geometry_clamps_to_scrollable_range() {
-    let geo = HorizontalGeometry::Exact {
+  fn exact_horizontal_map_clamps_to_scrollable_range() {
+    let map = HorizontalMap::Exact {
       content_width: 1000.0,
       key: test_measurement_key(),
     };
 
-    assert_eq!(geo.clamp_offset(-10.0, 300.0), 0.0);
-    assert_eq!(geo.clamp_offset(50.0, 300.0), 50.0);
-    assert_eq!(geo.clamp_offset(900.0, 300.0), 700.0);
+    assert_eq!(map.clamp_offset(-10.0, 300.0), 0.0);
+    assert_eq!(map.clamp_offset(50.0, 300.0), 50.0);
+    assert_eq!(map.clamp_offset(900.0, 300.0), 700.0);
     assert_eq!(
-      HorizontalGeometry::Exact {
+      HorizontalMap::Exact {
         content_width: 200.0,
         key: test_measurement_key(),
       }
@@ -313,24 +313,24 @@ mod tests {
   }
 
   #[test]
-  fn no_wrap_horizontal_geometry_is_unknown_without_measurement() {
-    let mut geo = ScrollGeometry::default();
-    geo.reconcile(&test_inputs(WrapMode::NoWrap));
+  fn no_wrap_horizontal_map_is_unknown_without_measurement() {
+    let mut map = ScrollMap::default();
+    map.reconcile(&test_inputs(WrapMode::NoWrap));
 
     assert_eq!(
-      geo.horizontal,
-      HorizontalGeometry::Unknown {
+      map.horizontal,
+      HorizontalMap::Unknown {
         key: test_measurement_key(),
       }
     );
   }
 
   #[test]
-  fn soft_wrap_horizontal_geometry_is_not_scrollable() {
-    let mut geo = ScrollGeometry::default();
-    geo.reconcile(&test_inputs(WrapMode::SoftWrap));
+  fn soft_wrap_horizontal_map_is_not_scrollable() {
+    let mut map = ScrollMap::default();
+    map.reconcile(&test_inputs(WrapMode::SoftWrap));
 
-    assert_eq!(geo.horizontal, HorizontalGeometry::Disabled);
+    assert_eq!(map.horizontal, HorizontalMap::Disabled);
   }
 
   #[test]
@@ -346,14 +346,14 @@ mod tests {
   }
 
   #[test]
-  fn soft_wrap_line_heights_result_updates_wrapped_vertical_geometry() {
+  fn soft_wrap_line_heights_result_updates_wrapped_vertical_map() {
     let key = soft_wrap_key(1, 320.0, 20.0);
-    let mut geometry = ScrollGeometry::default();
+    let mut map = ScrollMap::default();
 
-    geometry.reconcile(&soft_wrap_inputs(3, 20.0, key));
-    geometry.apply_measurement_result(&soft_wrap_result(key, &[1, 3, 2]));
+    map.reconcile(&soft_wrap_inputs(3, 20.0, key));
+    map.apply_measurement_result(&soft_wrap_result(key, &[1, 3, 2]));
 
-    let wrapped = wrapped_geometry(&geometry);
+    let wrapped = wrapped_map(&map);
 
     assert!(wrapped.fully_measured());
     assert_eq!(wrapped.measured_line_count, 3);
@@ -372,12 +372,12 @@ mod tests {
   fn soft_wrap_line_heights_result_with_stale_key_is_ignored() {
     let current_key = soft_wrap_key(1, 320.0, 20.0);
     let stale_key = soft_wrap_key(1, 480.0, 20.0);
-    let mut geometry = ScrollGeometry::default();
+    let mut map = ScrollMap::default();
 
-    geometry.reconcile(&soft_wrap_inputs(3, 20.0, current_key));
-    geometry.apply_measurement_result(&soft_wrap_result(stale_key, &[1, 3, 2]));
+    map.reconcile(&soft_wrap_inputs(3, 20.0, current_key));
+    map.apply_measurement_result(&soft_wrap_result(stale_key, &[1, 3, 2]));
 
-    let wrapped = wrapped_geometry(&geometry);
+    let wrapped = wrapped_map(&map);
 
     assert!(!wrapped.fully_measured());
     assert_eq!(wrapped.measured_line_count, 0);
@@ -399,12 +399,12 @@ mod tests {
   )]
   fn soft_wrap_line_heights_result_with_wrong_line_count_is_ignored() {
     let key = soft_wrap_key(1, 320.0, 20.0);
-    let mut geometry = ScrollGeometry::default();
+    let mut map = ScrollMap::default();
 
-    geometry.reconcile(&soft_wrap_inputs(3, 20.0, key));
-    geometry.apply_measurement_result(&soft_wrap_result(key, &[1, 3]));
+    map.reconcile(&soft_wrap_inputs(3, 20.0, key));
+    map.apply_measurement_result(&soft_wrap_result(key, &[1, 3]));
 
-    let wrapped = wrapped_geometry(&geometry);
+    let wrapped = wrapped_map(&map);
 
     assert!(!wrapped.fully_measured());
     assert_eq!(wrapped.measured_line_count, 0);
