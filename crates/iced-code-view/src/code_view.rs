@@ -1,4 +1,6 @@
+mod effect;
 mod gutter_draw;
+mod scrollbars;
 
 use std::sync::Arc;
 
@@ -11,17 +13,19 @@ use iced::advanced::{layout, renderer::Renderer as RendererTrait, widget::Widget
 use iced::mouse::ScrollDelta;
 
 use diffy_ui::Theme;
-use diffy_ui::widgets::scrollbar;
 
 use crate::document::Document;
 use crate::gutter::{GutterConfig, GutterMetricsRequest, GutterRenderArtifactRequest};
 use crate::insets::CodeViewInsets;
 use crate::measurement::{MeasurementRequest, MeasurementResult};
-use crate::scroll::{GeometryInputs, ScrollChange};
+use crate::scroll::GeometryInputs;
 use crate::state::CodeViewState;
 use crate::style::CodeViewStyle;
 use crate::text_layout::{TextLayoutConfig, TextLayoutRequest};
 use crate::viewport::Viewport;
+
+use self::effect::Effect;
+use self::scrollbars::CodeViewScrollbars;
 
 pub(crate) struct CodeView<'a, Message> {
   inputs: CodeViewInputs<'a>,
@@ -90,13 +94,19 @@ where
         self.on_mouse_wheel(tree, delta, layout, cursor, shell);
       }
       Event::Mouse(MouseEvent::ButtonPressed(Button::Left)) => {
-        self.on_scrollbar_press(tree, layout, cursor, shell);
+        CodeViewScrollbars::from_inputs(&self.inputs)
+          .on_press(tree, layout.bounds(), cursor)
+          .apply(shell);
       }
       Event::Mouse(MouseEvent::CursorMoved { .. }) => {
-        self.on_scrollbar_drag(tree, layout, cursor, shell);
+        CodeViewScrollbars::from_inputs(&self.inputs)
+          .on_drag(tree, layout.bounds(), cursor)
+          .apply(shell);
       }
       Event::Mouse(MouseEvent::ButtonReleased(Button::Left)) => {
-        self.on_scrollbar_release(tree, shell);
+        CodeViewScrollbars::from_inputs(&self.inputs)
+          .on_release(tree)
+          .apply(shell);
       }
       _ => {}
     }
@@ -130,13 +140,13 @@ where
       .text_layout
       .visible_layout()
       .is_some_and(|entry| entry.key.document_revision != self.inputs.document.revision());
-    let scrollbar_metrics = scrollbar::Metrics::default();
+    let scrollbars = CodeViewScrollbars::from_inputs(&self.inputs);
 
     let viewport = Viewport::new(
       resolved_size,
       insets,
       gutter_metrics,
-      scrollbar_metrics.hit_thickness,
+      scrollbars.right_chrome_reserve(),
     );
 
     let measurement_request = MeasurementRequest::new(
@@ -254,18 +264,8 @@ where
       });
     }
 
-    let scrollbar_geometry = self.vertical_scrollbar_geometry(state, bounds);
-    let scrollbar_style = scrollbar::Style::resolve(theme);
-
-    renderer.with_layer(bounds, |renderer| {
-      scrollbar::draw(
-        renderer,
-        &scrollbar_geometry,
-        &scrollbar_style,
-        scrollbar::Status::Idle,
-        1.0,
-      );
-    });
+    let scrollbars = CodeViewScrollbars::from_inputs(&self.inputs);
+    scrollbars.draw_vertical_overlay(state, renderer, theme, bounds);
   }
 }
 
@@ -279,154 +279,6 @@ impl<'a, Message> CodeView<'a, Message> {
         iced::Vector::new(*x * step, *y * step)
       }
     }
-  }
-
-  fn vertical_scrollbar_geometry(
-    &self,
-    state: &CodeViewState,
-    widget_bounds: iced::Rectangle,
-  ) -> scrollbar::Geometry {
-    let metrics = scrollbar::Metrics::default();
-    let snapshot = state
-      .scroll
-      .vertical_scrollbar_snapshot(state.viewport.scroll_viewport_size().height);
-
-    scrollbar::Geometry::new(snapshot, widget_bounds, metrics)
-  }
-
-  fn apply_scrollbar_update(
-    &self,
-    state: &mut CodeViewState,
-    update: scrollbar::Update,
-    geometry: Option<&scrollbar::Geometry>,
-    shell: &mut iced::advanced::Shell<'_, Message>,
-  ) {
-    if let Some(action) = update.action {
-      self.apply_scrollbar_action(state, action, geometry, shell);
-    }
-
-    if update.capture_event {
-      shell.capture_event();
-    }
-
-    if update.request_redraw {
-      shell.request_redraw();
-    }
-  }
-
-  fn apply_scrollbar_action(
-    &self,
-    state: &mut CodeViewState,
-    action: scrollbar::Action,
-    geometry: Option<&scrollbar::Geometry>,
-    shell: &mut iced::advanced::Shell<'_, Message>,
-  ) {
-    match action.axis() {
-      scrollbar::Axis::Vertical => {
-        self.apply_vertical_scrollbar_action(state, action, geometry, shell);
-      }
-      scrollbar::Axis::Horizontal => {}
-    }
-  }
-
-  fn apply_vertical_scrollbar_action(
-    &self,
-    state: &mut CodeViewState,
-    action: scrollbar::Action,
-    geometry: Option<&scrollbar::Geometry>,
-    shell: &mut iced::advanced::Shell<'_, Message>,
-  ) {
-    use scrollbar::{Action, Geometry};
-
-    match action {
-      Action::DragTo { offset, .. } => {
-        self.apply_vertical_scrollbar_offset(state, offset, shell);
-      }
-      Action::TrackPress { pointer_offset, .. } => {
-        let Some(Geometry {
-          thumb: Some(thumb), ..
-        }) = geometry
-        else {
-          return;
-        };
-
-        let target_thumb_start = pointer_offset as f32 - thumb.len / 2.0;
-        let Some(offset) = thumb.offset_for_thumb_start(target_thumb_start) else {
-          return;
-        };
-
-        self.apply_vertical_scrollbar_offset(state, offset, shell);
-      }
-    }
-  }
-
-  fn apply_vertical_scrollbar_offset(
-    &self,
-    state: &mut CodeViewState,
-    offset: f64,
-    shell: &mut iced::advanced::Shell<'_, Message>,
-  ) {
-    match state.scroll.set_vertical_offset_from_px(offset) {
-      Some(ScrollChange::RequiresLayout) => {
-        shell.invalidate_layout();
-        shell.request_redraw();
-      }
-      Some(ScrollChange::RedrawOnly) => {
-        shell.request_redraw();
-      }
-      None => {}
-    }
-  }
-
-  fn on_scrollbar_press(
-    &mut self,
-    tree: &mut widget::Tree,
-    layout: layout::Layout<'_>,
-    cursor: iced::advanced::mouse::Cursor,
-    shell: &mut iced::advanced::Shell<'_, Message>,
-  ) {
-    let Some(cursor_position) = cursor.position() else {
-      return;
-    };
-
-    let state = tree.state.downcast_mut::<CodeViewState>();
-    let geometry = self.vertical_scrollbar_geometry(state, layout.bounds());
-    let update = state.scrollbar.press(cursor_position, &geometry);
-
-    self.apply_scrollbar_update(state, update, Some(&geometry), shell);
-  }
-
-  fn on_scrollbar_drag(
-    &mut self,
-    tree: &mut widget::Tree,
-    layout: layout::Layout<'_>,
-    cursor: iced::advanced::mouse::Cursor,
-    shell: &mut iced::advanced::Shell<'_, Message>,
-  ) {
-    let state = tree.state.downcast_mut::<CodeViewState>();
-    if !state.scrollbar.is_dragging() {
-      return;
-    }
-
-    let Some(cursor_position) = cursor.position() else {
-      return;
-    };
-
-    let geometry = self.vertical_scrollbar_geometry(state, layout.bounds());
-    let update = state.scrollbar.drag_to(cursor_position, &geometry);
-
-    self.apply_scrollbar_update(state, update, Some(&geometry), shell);
-  }
-
-  fn on_scrollbar_release(
-    &mut self,
-    tree: &mut widget::Tree,
-    shell: &mut iced::advanced::Shell<'_, Message>,
-  ) {
-    let state = tree.state.downcast_mut::<CodeViewState>();
-    let update = state.scrollbar.release();
-
-    self.apply_scrollbar_update(state, update, None, shell);
   }
 
   fn on_mouse_wheel(
@@ -443,24 +295,16 @@ impl<'a, Message> CodeView<'a, Message> {
       return;
     }
 
-    // Stop wheel events at CodeView, so scrolling does not chain to a parent at edges.
-    // For web-like scroll chaining, capture only when `apply_wheel_delta` returns `Some(_)`.
-    shell.capture_event();
-
+    let mut effect = Effect::capture_event();
     let delta = self.scroll_delta_to_pixels(delta);
     let state = tree.state.downcast_mut::<CodeViewState>();
     let scroll_viewport = state.viewport.scroll_viewport_size();
 
-    match state.scroll.apply_wheel_delta(delta, scroll_viewport) {
-      Some(ScrollChange::RedrawOnly) => {
-        shell.request_redraw();
-      }
-      Some(ScrollChange::RequiresLayout) => {
-        shell.invalidate_layout();
-        shell.request_redraw();
-      }
-      None => {}
-    }
+    effect.merge(Effect::from_scroll_change(
+      state.scroll.apply_wheel_delta(delta, scroll_viewport),
+    ));
+
+    effect.apply(shell);
   }
 
   fn on_redraw_requested(
