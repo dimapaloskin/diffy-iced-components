@@ -48,7 +48,7 @@ impl CodeViewScrollbars {
     let style = scrollbar::Style::resolve(theme);
 
     renderer.with_layer(widget_bounds, |renderer| {
-      scrollbar::draw(renderer, &geometry, &style, scrollbar::Status::Idle, 1.0);
+      scrollbar::draw(renderer, &geometry, &style, state.scrollbar.status(), 1.0);
     });
   }
 
@@ -132,31 +132,38 @@ impl CodeViewScrollbars {
     self.apply_update(state, update, Some(&geometry))
   }
 
-  pub(super) fn on_drag(
+  pub(super) fn on_cursor_moved(
     &self,
     tree: &mut widget::Tree,
     widget_bounds: iced::Rectangle,
     cursor: iced::advanced::mouse::Cursor,
   ) -> Effect {
     let state = tree.state.downcast_mut::<CodeViewState>();
-    if !state.scrollbar.is_dragging() {
-      return Effect::none();
-    }
-
-    let Some(cursor_position) = cursor.position() else {
-      return Effect::none();
-    };
-
     let geometry = self.vertical_geometry(state, widget_bounds);
-    let update = state.scrollbar.drag_to(cursor_position, &geometry);
+
+    let update = if state.scrollbar.is_dragging() {
+      let Some(cursor_position) = cursor.position() else {
+        return Effect::none();
+      };
+
+      state.scrollbar.drag_to(cursor_position, &geometry)
+    } else {
+      state.scrollbar.cursor_moved(cursor.position(), &geometry)
+    };
 
     self.apply_update(state, update, Some(&geometry))
   }
 
-  pub(super) fn on_release(&self, tree: &mut widget::Tree) -> Effect {
+  pub(super) fn on_release(
+    &self,
+    tree: &mut widget::Tree,
+    widget_bounds: iced::Rectangle,
+    cursor: iced::advanced::mouse::Cursor,
+  ) -> Effect {
     let state = tree.state.downcast_mut::<CodeViewState>();
-    let update = state.scrollbar.release();
+    let geometry = self.vertical_geometry(state, widget_bounds);
+    let update = state.scrollbar.release(cursor.position(), &geometry);
 
-    self.apply_update(state, update, None)
+    self.apply_update(state, update, Some(&geometry))
   }
 }

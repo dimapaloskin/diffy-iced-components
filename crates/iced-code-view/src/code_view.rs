@@ -101,12 +101,12 @@ where
       }
       Event::Mouse(MouseEvent::CursorMoved { .. }) => {
         CodeViewScrollbars::from_inputs(&self.inputs)
-          .on_drag(tree, layout.bounds(), cursor)
+          .on_cursor_moved(tree, layout.bounds(), cursor)
           .apply(shell);
       }
       Event::Mouse(MouseEvent::ButtonReleased(Button::Left)) => {
         CodeViewScrollbars::from_inputs(&self.inputs)
-          .on_release(tree)
+          .on_release(tree, layout.bounds(), cursor)
           .apply(shell);
       }
       _ => {}

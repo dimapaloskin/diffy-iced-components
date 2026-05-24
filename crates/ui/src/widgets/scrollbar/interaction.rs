@@ -1,6 +1,6 @@
 use iced::Point;
 
-use crate::widgets::scrollbar::TrackPressRegion;
+use crate::widgets::scrollbar::{Status, TrackPressRegion};
 
 use super::{Action, Axis, Geometry, ThumbGeometry};
 
@@ -18,6 +18,14 @@ impl State {
     matches!(self.interaction, Interaction::Dragging { .. })
   }
 
+  pub fn status(&self) -> Status {
+    match self.interaction {
+      Interaction::Idle => Status::Idle,
+      Interaction::Hover => Status::Hovered,
+      Interaction::Dragging { .. } => Status::Pressed,
+    }
+  }
+
   pub fn press(&mut self, cursor_position: Point, geometry: &Geometry) -> Update {
     let Some(thumb) = geometry.thumb else {
       return Update::ignored();
@@ -32,6 +40,80 @@ impl State {
     }
 
     Update::ignored()
+  }
+
+  pub fn cursor_moved(&mut self, cursor_position: Option<Point>, geometry: &Geometry) -> Update {
+    if self.is_dragging() {
+      return Update::ignored();
+    }
+
+    let next_interaction = Self::hover_interaction(cursor_position, geometry);
+    if next_interaction == self.interaction {
+      return Update::ignored();
+    }
+
+    self.interaction = next_interaction;
+
+    Update {
+      action: None,
+      capture_event: false,
+      request_redraw: true,
+    }
+  }
+
+  pub fn drag_to(&self, cursor_position: Point, geometry: &Geometry) -> Update {
+    let Interaction::Dragging { axis, grab_offset } = self.interaction else {
+      return Update::ignored();
+    };
+
+    if axis != geometry.axis {
+      return Update::ignored();
+    }
+
+    let Some(thumb) = geometry.thumb else {
+      return Update::ignored();
+    };
+
+    let thumb_start = Self::axis_position(axis, cursor_position)
+      - grab_offset
+      - Self::axis_start(axis, geometry.track_bounds);
+
+    let Some(offset) = thumb.offset_for_thumb_start(thumb_start) else {
+      return Update::ignored();
+    };
+
+    Update {
+      action: Some(Action::DragTo { axis, offset }),
+      capture_event: true,
+      request_redraw: true,
+    }
+  }
+
+  pub fn release(&mut self, cursor_position: Option<Point>, geometry: &Geometry) -> Update {
+    match self.interaction {
+      Interaction::Idle | Interaction::Hover => Update::ignored(),
+      Interaction::Dragging { .. } => {
+        self.interaction = Self::hover_interaction(cursor_position, geometry);
+
+        Update {
+          action: None,
+          capture_event: true,
+          request_redraw: true,
+        }
+      }
+    }
+  }
+
+  fn hover_interaction(cursor_position: Option<Point>, geometry: &Geometry) -> Interaction {
+    let (Some(cursor_position), Some(thumb)) = (cursor_position, geometry.thumb) else {
+      return Interaction::Idle;
+    };
+
+    if thumb.hit_bounds.contains(cursor_position) {
+      Interaction::Hover
+    } else {
+      Interaction::Idle
+    }
   }
 
   fn thumb_press(
@@ -96,49 +178,6 @@ impl State {
     }
   }
 
-  pub fn drag_to(&self, cursor_position: Point, geometry: &Geometry) -> Update {
-    let Interaction::Dragging { axis, grab_offset } = self.interaction else {
-      return Update::ignored();
-    };
-
-    if axis != geometry.axis {
-      return Update::ignored();
-    }
-
-    let Some(thumb) = geometry.thumb else {
-      return Update::ignored();
-    };
-
-    let thumb_start = Self::axis_position(axis, cursor_position)
-      - grab_offset
-      - Self::axis_start(axis, geometry.track_bounds);
-
-    let Some(offset) = thumb.offset_for_thumb_start(thumb_start) else {
-      return Update::ignored();
-    };
-
-    Update {
-      action: Some(Action::DragTo { axis, offset }),
-      capture_event: true,
-      request_redraw: true,
-    }
-  }
-
-  pub fn release(&mut self) -> Update {
-    match self.interaction {
-      Interaction::Idle => Update::ignored(),
-      Interaction::Dragging { .. } => {
-        self.interaction = Interaction::Idle;
-
-        Update {
-          action: None,
-          capture_event: true,
-          request_redraw: true,
-        }
-      }
-    }
-  }
-
   fn axis_position(axis: Axis, point: Point) -> f32 {
     match axis {
       Axis::Vertical => point.y,
@@ -165,6 +204,7 @@ impl State {
 pub enum Interaction {
   #[default]
   Idle,
+  Hover,
   Dragging {
     axis: Axis,
     grab_offset: f32,
@@ -251,7 +291,7 @@ mod tests {
     );
     assert!(drag.capture_event);
 
-    let release = state.release();
+    let release = state.release(None, &geometry);
 
     assert!(release.capture_event);
     assert_eq!(state.interaction(), Interaction::Idle);
