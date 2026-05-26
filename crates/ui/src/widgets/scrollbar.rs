@@ -1,9 +1,11 @@
+pub mod behavior;
 pub mod draw;
 pub mod geometry;
 pub mod interaction;
 pub mod metrics;
 pub mod style;
 
+pub use behavior::{Behavior, Visibility};
 pub use draw::draw;
 pub use geometry::{Geometry, ThumbGeometry};
 pub use interaction::{Interaction, State, Update};

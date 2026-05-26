@@ -94,6 +94,10 @@ impl Geometry {
       }
     }
   }
+
+  pub fn is_renderable(&self) -> bool {
+    self.thumb.is_some()
+  }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]

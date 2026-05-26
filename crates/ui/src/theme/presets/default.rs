@@ -114,7 +114,7 @@ fn default_light() -> ThemeTokens {
     },
     scrollbar: scrollbar_tokens(
       iced::Color::from_rgb8(0x71, 0x71, 0x7a),
-      iced::Color::from_rgb8(0xf4, 0xf4, 0xf5),
+      iced::Color::from_rgb8(0x74, 0x74, 0x75),
     ),
   }
 }

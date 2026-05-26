@@ -1,8 +1,7 @@
 use iced::Point;
 
-use crate::widgets::scrollbar::{Status, TrackPressRegion};
-
-use super::{Action, Axis, Geometry, ThumbGeometry};
+use super::behavior;
+use super::{Action, Axis, Geometry, Status, ThumbGeometry, TrackPressRegion};
 
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub struct State {
@@ -10,20 +9,36 @@ pub struct State {
 }
 
 impl State {
-  pub fn interaction(&self) -> Interaction {
-    self.interaction
-  }
-
-  pub fn is_dragging(&self) -> bool {
-    matches!(self.interaction, Interaction::Dragging { .. })
-  }
-
   pub fn status(&self) -> Status {
     match self.interaction {
       Interaction::Idle => Status::Idle,
       Interaction::Hover => Status::Hovered,
       Interaction::Dragging { .. } => Status::Pressed,
     }
+  }
+
+  pub fn is_visible(&self, geometry: &Geometry, behavior: behavior::Behavior) -> bool {
+    if !geometry.is_renderable() {
+      return false;
+    }
+
+    if behavior.visibility.always_visible {
+      return true;
+    }
+
+    match self.interaction {
+      Interaction::Dragging { .. } => true,
+      Interaction::Hover => behavior.visibility.reveal_on_hover,
+      Interaction::Idle => false,
+    }
+  }
+
+  pub fn interaction(&self) -> Interaction {
+    self.interaction
+  }
+
+  pub fn is_dragging(&self) -> bool {
+    matches!(self.interaction, Interaction::Dragging { .. })
   }
 
   pub fn press(&mut self, cursor_position: Point, geometry: &Geometry) -> Update {
@@ -105,11 +120,11 @@ impl State {
   }
 
   fn hover_interaction(cursor_position: Option<Point>, geometry: &Geometry) -> Interaction {
-    let (Some(cursor_position), Some(thumb)) = (cursor_position, geometry.thumb) else {
+    let Some(cursor_position) = cursor_position else {
       return Interaction::Idle;
     };
 
-    if thumb.hit_bounds.contains(cursor_position) {
+    if geometry.is_renderable() && geometry.track_bounds.contains(cursor_position) {
       Interaction::Hover
     } else {
       Interaction::Idle

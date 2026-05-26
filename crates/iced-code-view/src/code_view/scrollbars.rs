@@ -10,12 +10,14 @@ use crate::state::CodeViewState;
 
 pub(super) struct CodeViewScrollbars {
   metrics: scrollbar::Metrics,
+  behavior: scrollbar::Behavior,
 }
 
 impl CodeViewScrollbars {
   pub(super) fn from_inputs(_inputs: &CodeViewInputs) -> Self {
     Self {
       metrics: scrollbar::Metrics::default(),
+      behavior: scrollbar::Behavior::default().always_visible(),
     }
   }
 
@@ -46,6 +48,10 @@ impl CodeViewScrollbars {
   {
     let geometry = self.vertical_geometry(state, widget_bounds);
     let style = scrollbar::Style::resolve(theme);
+
+    if !state.scrollbar.is_visible(&geometry, self.behavior) {
+      return;
+    }
 
     renderer.with_layer(widget_bounds, |renderer| {
       scrollbar::draw(renderer, &geometry, &style, state.scrollbar.status(), 1.0);
@@ -127,6 +133,11 @@ impl CodeViewScrollbars {
 
     let state = tree.state.downcast_mut::<CodeViewState>();
     let geometry = self.vertical_geometry(state, widget_bounds);
+
+    if !state.scrollbar.is_visible(&geometry, self.behavior) {
+      return Effect::none();
+    }
+
     let update = state.scrollbar.press(cursor_position, &geometry);
 
     self.apply_update(state, update, Some(&geometry))
