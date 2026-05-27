@@ -1,3 +1,5 @@
+use iced::time::Instant;
+
 use crate::scroll::ScrollChange;
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -5,6 +7,7 @@ pub(super) struct Effect {
   pub(super) capture_event: bool,
   pub(super) request_redraw: bool,
   pub(super) invalidate_layout: bool,
+  pub(super) request_redraw_at: Option<Instant>,
 }
 
 impl Effect {
@@ -13,6 +16,7 @@ impl Effect {
       capture_event: false,
       request_redraw: false,
       invalidate_layout: false,
+      request_redraw_at: None,
     }
   }
 
@@ -22,6 +26,7 @@ impl Effect {
       capture_event: true,
       request_redraw: false,
       invalidate_layout: false,
+      request_redraw_at: None,
     }
   }
 
@@ -29,6 +34,11 @@ impl Effect {
     self.capture_event |= other.capture_event;
     self.request_redraw |= other.request_redraw;
     self.invalidate_layout |= other.invalidate_layout;
+    self.request_redraw_at = match (self.request_redraw_at, other.request_redraw_at) {
+      (Some(current), Some(next)) => Some(current.min(next)),
+      (None, Some(next)) => Some(next),
+      (current, None) => current,
+    };
   }
 
   pub(super) fn from_scroll_change(change: Option<ScrollChange>) -> Self {
@@ -37,6 +47,7 @@ impl Effect {
         invalidate_layout: true,
         request_redraw: true,
         capture_event: false,
+        request_redraw_at: None,
       },
       Some(ScrollChange::RedrawOnly) => Self {
         request_redraw: true,
@@ -57,6 +68,10 @@ impl Effect {
 
     if self.request_redraw {
       shell.request_redraw();
+    }
+
+    if let Some(at) = self.request_redraw_at {
+      shell.request_redraw_at(at);
     }
   }
 }

@@ -12,6 +12,7 @@ use iced::advanced::layout;
 use iced::advanced::renderer::Renderer as RendererTrait;
 use iced::advanced::widget::{self, Tree, Widget};
 use iced::mouse::ScrollDelta;
+use iced::time::Instant;
 
 use diffy_ui::Theme;
 
@@ -88,8 +89,8 @@ where
     use iced::window::Event::RedrawRequested;
 
     match event {
-      Event::Window(RedrawRequested(_)) => {
-        self.on_redraw_requested(tree, shell);
+      Event::Window(RedrawRequested(now)) => {
+        self.on_redraw_requested(tree, layout.bounds(), *now, shell);
       }
       Event::Mouse(MouseEvent::WheelScrolled { delta }) => {
         self.on_mouse_wheel(tree, delta, layout, cursor, shell);
@@ -102,6 +103,11 @@ where
       Event::Mouse(MouseEvent::CursorMoved { .. }) => {
         CodeViewScrollbars::from_inputs(&self.inputs)
           .on_cursor_moved(tree, layout.bounds(), cursor)
+          .apply(shell);
+      }
+      Event::Mouse(MouseEvent::CursorLeft) => {
+        CodeViewScrollbars::from_inputs(&self.inputs)
+          .on_cursor_left(tree, layout.bounds())
           .apply(shell);
       }
       Event::Mouse(MouseEvent::ButtonReleased(Button::Left)) => {
@@ -303,14 +309,22 @@ impl<'a, Message> CodeView<'a, Message> {
       state.scroll.apply_wheel_delta(delta, scroll_viewport),
     ));
 
+    effect.merge(CodeViewScrollbars::from_inputs(&self.inputs).note_activity(tree, Instant::now()));
+
     effect.apply(shell);
   }
 
   fn on_redraw_requested(
     &mut self,
-    tree: &mut Tree,
+    tree: &mut widget::Tree,
+    _widget_bounds: iced::Rectangle,
+    now: iced::time::Instant,
     shell: &mut iced::advanced::Shell<'_, Message>,
   ) {
+    CodeViewScrollbars::from_inputs(&self.inputs)
+      .on_redraw_requested(tree, now)
+      .apply(shell);
+
     let state = tree.state.downcast_mut::<CodeViewState>();
 
     if let Some(request) = state.measurement_request_to_publish() {

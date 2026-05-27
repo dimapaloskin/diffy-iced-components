@@ -1,4 +1,5 @@
 use iced::Point;
+use iced::time::Instant;
 
 use super::behavior;
 use super::{Action, Axis, Geometry, Status, ThumbGeometry, TrackPressRegion};
@@ -6,6 +7,7 @@ use super::{Action, Axis, Geometry, Status, ThumbGeometry, TrackPressRegion};
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub struct State {
   interaction: Interaction,
+  last_activity_at: Option<Instant>,
 }
 
 impl State {
@@ -23,6 +25,10 @@ impl State {
     }
 
     if behavior.visibility.always_visible {
+      return true;
+    }
+
+    if self.last_activity_at.is_some() {
       return true;
     }
 
@@ -57,22 +63,37 @@ impl State {
     Update::ignored()
   }
 
-  pub fn cursor_moved(&mut self, cursor_position: Option<Point>, geometry: &Geometry) -> Update {
+  pub fn cursor_moved(
+    &mut self,
+    cursor_position: Option<Point>,
+    geometry: &Geometry,
+    now: Instant,
+  ) -> Update {
     if self.is_dragging() {
       return Update::ignored();
     }
 
+    let previous_interaction = self.interaction;
     let next_interaction = Self::hover_interaction(cursor_position, geometry);
-    if next_interaction == self.interaction {
+
+    if next_interaction == previous_interaction {
       return Update::ignored();
     }
 
     self.interaction = next_interaction;
 
+    if matches!(previous_interaction, Interaction::Hover)
+      && matches!(next_interaction, Interaction::Idle)
+      && self.last_activity_at.is_some()
+    {
+      self.last_activity_at = Some(now);
+    }
+
     Update {
       action: None,
       capture_event: false,
       request_redraw: true,
+      request_redraw_at: None,
     }
   }
 
@@ -101,6 +122,54 @@ impl State {
       action: Some(Action::DragTo { axis, offset }),
       capture_event: true,
       request_redraw: true,
+      request_redraw_at: None,
+    }
+  }
+
+  pub fn note_activity(&mut self, now: Instant) -> Update {
+    self.last_activity_at = Some(now);
+
+    Update {
+      request_redraw: true,
+      ..Update::ignored()
+    }
+  }
+
+  pub fn redraw_requested(&mut self, now: Instant, behavior: behavior::Behavior) -> Update {
+    if behavior.visibility.always_visible {
+      return Update::ignored();
+    }
+
+    let Some(last_activity_at) = self.last_activity_at else {
+      return Update::ignored();
+    };
+
+    let hide_at = last_activity_at + behavior.visibility.hide_delay;
+
+    if now < hide_at {
+      return Update {
+        request_redraw_at: Some(hide_at),
+        ..Update::ignored()
+      };
+    }
+
+    if matches!(
+      self.interaction,
+      Interaction::Hover | Interaction::Dragging { .. }
+    ) {
+      self.last_activity_at = Some(now);
+
+      return Update {
+        request_redraw_at: Some(now + behavior.visibility.hide_delay),
+        ..Update::ignored()
+      };
+    }
+
+    self.last_activity_at = None;
+
+    Update {
+      request_redraw: true,
+      ..Update::ignored()
     }
   }
 
@@ -114,6 +183,7 @@ impl State {
           action: None,
           capture_event: true,
           request_redraw: true,
+          request_redraw_at: None,
         }
       }
     }
@@ -148,6 +218,7 @@ impl State {
       action: None,
       capture_event: true,
       request_redraw: true,
+      request_redraw_at: None,
     }
   }
 
@@ -190,6 +261,7 @@ impl State {
       }),
       capture_event: true,
       request_redraw: true,
+      request_redraw_at: None,
     }
   }
 
@@ -231,6 +303,7 @@ pub struct Update {
   pub action: Option<Action>,
   pub capture_event: bool,
   pub request_redraw: bool,
+  pub request_redraw_at: Option<Instant>,
 }
 
 impl Update {
@@ -239,6 +312,7 @@ impl Update {
       action: None,
       capture_event: false,
       request_redraw: false,
+      request_redraw_at: None,
     }
   }
 }
