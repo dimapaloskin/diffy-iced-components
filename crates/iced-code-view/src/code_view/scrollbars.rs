@@ -73,7 +73,25 @@ impl CodeViewScrollbars {
     self.apply_update(state, update, None)
   }
 
-  pub(super) fn apply_update(
+  fn apply_pointer_update(
+    &self,
+    state: &mut CodeViewState,
+    update: scrollbar::Update,
+    geometry: &scrollbar::Geometry,
+    now: Instant,
+  ) -> Effect {
+    let captured = update.capture_event;
+    let mut effect = self.apply_update(state, update, Some(geometry));
+
+    if captured {
+      let update = state.scrollbar.note_activity(now);
+      effect.merge(self.apply_update(state, update, None));
+    }
+
+    effect
+  }
+
+  fn apply_update(
     &self,
     state: &mut CodeViewState,
     update: scrollbar::Update,
@@ -147,6 +165,7 @@ impl CodeViewScrollbars {
       return Effect::none();
     };
 
+    let now = Instant::now();
     let state = tree.state.downcast_mut::<CodeViewState>();
     let geometry = self.vertical_geometry(state, widget_bounds);
 
@@ -155,15 +174,7 @@ impl CodeViewScrollbars {
     }
 
     let update = state.scrollbar.press(cursor_position, &geometry);
-
-    let mut effect = self.apply_update(state, update, Some(&geometry));
-
-    if effect.capture_event {
-      let update = state.scrollbar.note_activity(Instant::now());
-      effect.merge(self.apply_update(state, update, None));
-    }
-
-    effect
+    self.apply_pointer_update(state, update, &geometry, now)
   }
 
   pub(super) fn on_cursor_moved(
@@ -172,6 +183,7 @@ impl CodeViewScrollbars {
     widget_bounds: iced::Rectangle,
     cursor: iced::advanced::mouse::Cursor,
   ) -> Effect {
+    let now = Instant::now();
     let state = tree.state.downcast_mut::<CodeViewState>();
     let geometry = self.vertical_geometry(state, widget_bounds);
 
@@ -184,17 +196,10 @@ impl CodeViewScrollbars {
     } else {
       state
         .scrollbar
-        .cursor_moved(cursor.position(), &geometry, Instant::now())
+        .cursor_moved(cursor.position(), &geometry, now)
     };
 
-    let mut effect = self.apply_update(state, update, Some(&geometry));
-
-    if effect.capture_event {
-      let update = state.scrollbar.note_activity(Instant::now());
-      effect.merge(self.apply_update(state, update, None));
-    }
-
-    effect
+    self.apply_pointer_update(state, update, &geometry, now)
   }
 
   pub(super) fn on_cursor_left(
@@ -202,13 +207,13 @@ impl CodeViewScrollbars {
     tree: &mut widget::Tree,
     widget_bounds: iced::Rectangle,
   ) -> Effect {
+    let now = Instant::now();
     let state = tree.state.downcast_mut::<CodeViewState>();
     let geometry = self.vertical_geometry(state, widget_bounds);
-    let update = state
-      .scrollbar
-      .cursor_moved(None, &geometry, Instant::now());
 
-    self.apply_update(state, update, Some(&geometry))
+    let update = state.scrollbar.cursor_moved(None, &geometry, now);
+
+    self.apply_pointer_update(state, update, &geometry, now)
   }
 
   pub(super) fn on_release(
@@ -217,17 +222,11 @@ impl CodeViewScrollbars {
     widget_bounds: iced::Rectangle,
     cursor: iced::advanced::mouse::Cursor,
   ) -> Effect {
+    let now = Instant::now();
     let state = tree.state.downcast_mut::<CodeViewState>();
     let geometry = self.vertical_geometry(state, widget_bounds);
     let update = state.scrollbar.release(cursor.position(), &geometry);
 
-    let mut effect = self.apply_update(state, update, Some(&geometry));
-
-    if effect.capture_event {
-      let update = state.scrollbar.note_activity(Instant::now());
-      effect.merge(self.apply_update(state, update, None));
-    }
-
-    effect
+    self.apply_pointer_update(state, update, &geometry, now)
   }
 }
