@@ -18,6 +18,29 @@ pub enum Axis {
   Horizontal,
 }
 
+impl Axis {
+  pub fn coord_of(self, point: iced::Point) -> f32 {
+    match self {
+      Axis::Vertical => point.y,
+      Axis::Horizontal => point.x,
+    }
+  }
+
+  pub fn start_of(self, bounds: iced::Rectangle) -> f32 {
+    match self {
+      Axis::Vertical => bounds.y,
+      Axis::Horizontal => bounds.x,
+    }
+  }
+
+  pub fn len_of(self, bounds: iced::Rectangle) -> f32 {
+    match self {
+      Axis::Vertical => bounds.height,
+      Axis::Horizontal => bounds.width,
+    }
+  }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ScrollExtent {
   Disabled,

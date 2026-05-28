@@ -110,9 +110,8 @@ impl State {
       return Update::ignored();
     };
 
-    let thumb_start = Self::axis_position(axis, cursor_position)
-      - grab_offset
-      - Self::axis_start(axis, geometry.track_bounds);
+    let thumb_start =
+      axis.coord_of(cursor_position) - grab_offset - axis.start_of(geometry.track_bounds);
 
     let Some(offset) = thumb.offset_for_thumb_start(thumb_start) else {
       return Update::ignored();
@@ -209,8 +208,7 @@ impl State {
   ) -> Update {
     let axis = geometry.axis;
 
-    let grab_offset =
-      Self::axis_position(axis, cursor_position) - Self::axis_start(axis, thumb.hit_bounds);
+    let grab_offset = axis.coord_of(cursor_position) - axis.start_of(thumb.hit_bounds);
 
     self.interaction = Interaction::Dragging { axis, grab_offset };
 
@@ -230,22 +228,21 @@ impl State {
   ) -> Update {
     let axis = geometry.axis;
 
-    let track_len = Self::axis_len(axis, geometry.track_bounds);
+    let track_len = axis.len_of(geometry.track_bounds);
     if track_len <= 0.0 {
       return Update::ignored();
     }
 
-    let pointer_offset =
-      Self::axis_position(axis, cursor_position) - Self::axis_start(axis, geometry.track_bounds);
-    let pointer_offset = pointer_offset.clamp(0.0, track_len) as f64;
+    let pointer_position = axis.coord_of(cursor_position);
+    let track_start = axis.start_of(geometry.track_bounds);
+    let pointer_offset = (pointer_position - track_start).clamp(0.0, track_len) as f64;
     let track_ratio = pointer_offset / track_len as f64;
 
-    let region =
-      if Self::axis_position(axis, cursor_position) < Self::axis_start(axis, thumb.hit_bounds) {
-        TrackPressRegion::BeforeThumb
-      } else {
-        TrackPressRegion::AfterThumb
-      };
+    let region = if pointer_position < axis.start_of(thumb.hit_bounds) {
+      TrackPressRegion::BeforeThumb
+    } else {
+      TrackPressRegion::AfterThumb
+    };
 
     self.interaction = Interaction::Dragging {
       axis,
@@ -262,27 +259,6 @@ impl State {
       capture_event: true,
       request_redraw: true,
       request_redraw_at: None,
-    }
-  }
-
-  fn axis_position(axis: Axis, point: Point) -> f32 {
-    match axis {
-      Axis::Vertical => point.y,
-      Axis::Horizontal => point.x,
-    }
-  }
-
-  fn axis_start(axis: Axis, bounds: iced::Rectangle) -> f32 {
-    match axis {
-      Axis::Vertical => bounds.y,
-      Axis::Horizontal => bounds.x,
-    }
-  }
-
-  fn axis_len(axis: Axis, bounds: iced::Rectangle) -> f32 {
-    match axis {
-      Axis::Vertical => bounds.height,
-      Axis::Horizontal => bounds.width,
     }
   }
 }

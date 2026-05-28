@@ -119,7 +119,7 @@ impl ThumbGeometry {
       return None;
     }
 
-    let track_len = Self::axis_len(snapshot.axis, track_bounds);
+    let track_len = snapshot.axis.len_of(track_bounds);
     if track_len <= 0.0 {
       return None;
     }
@@ -156,13 +156,6 @@ impl ThumbGeometry {
     let offset = (thumb_start / self.travel_len) as f64 * self.max_scroll;
 
     Some(offset)
-  }
-
-  fn axis_len(axis: Axis, bounds: Rectangle) -> f32 {
-    match axis {
-      Axis::Vertical => bounds.height,
-      Axis::Horizontal => bounds.width,
-    }
   }
 
   fn thumb_bounds(axis: Axis, track: Rectangle, start: f32, len: f32) -> Rectangle {
