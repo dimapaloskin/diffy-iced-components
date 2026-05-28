@@ -83,6 +83,8 @@ impl CodeViewScrollbars {
     let captured = update.capture_event;
     let mut effect = self.apply_update(state, update, Some(geometry));
 
+    // A captured scrollbar event means the user interacted with it,
+    // so auto-hide activity is refreshed too.
     if captured {
       let update = state.scrollbar.note_activity(now);
       effect.merge(self.apply_update(state, update, None));
@@ -130,7 +132,9 @@ impl CodeViewScrollbars {
     geometry: Option<&scrollbar::Geometry>,
   ) -> Effect {
     match action {
-      scrollbar::Action::DragTo { offset, .. } => self.apply_vertical_offset(state, offset),
+      scrollbar::Action::DragTo { offset, .. } => {
+        Effect::from_scroll_change(state.scroll.set_vertical_offset_from_px(offset))
+      }
       scrollbar::Action::TrackPress { pointer_offset, .. } => {
         let Some(scrollbar::Geometry {
           thumb: Some(thumb), ..
@@ -144,13 +148,9 @@ impl CodeViewScrollbars {
           return Effect::none();
         };
 
-        self.apply_vertical_offset(state, offset)
+        Effect::from_scroll_change(state.scroll.set_vertical_offset_from_px(offset))
       }
     }
-  }
-
-  fn apply_vertical_offset(&self, state: &mut CodeViewState, offset: f64) -> Effect {
-    Effect::from_scroll_change(state.scroll.set_vertical_offset_from_px(offset))
   }
 }
 
