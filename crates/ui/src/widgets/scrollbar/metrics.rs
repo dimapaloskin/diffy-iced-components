@@ -24,3 +24,9 @@ impl Default for Metrics {
     }
   }
 }
+
+impl Metrics {
+  pub fn edge_reserve(&self) -> f32 {
+    self.edge_inset.max(0.0) + self.hit_thickness.max(0.0)
+  }
+}

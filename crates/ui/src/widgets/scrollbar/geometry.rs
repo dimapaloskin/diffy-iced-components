@@ -320,4 +320,23 @@ mod tests {
       Some(thumb.max_scroll)
     );
   }
+
+  #[test]
+  fn edge_reserve_matches_vertical_hit_footprint() {
+    let metrics = Metrics {
+      edge_inset: 7.0,
+      hit_thickness: 14.0,
+      ..Metrics::default()
+    };
+
+    let placement = placement_bounds();
+    let geometry = Geometry::new(scrollable_snapshot(), placement, metrics);
+    let placement_right = placement.x + placement.width;
+
+    assert_eq!(metrics.edge_reserve(), 21.0);
+    assert_eq!(
+      geometry.hit_bounds.x,
+      placement_right - metrics.edge_reserve()
+    );
+  }
 }

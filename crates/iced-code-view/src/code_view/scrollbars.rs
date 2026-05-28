@@ -23,7 +23,7 @@ impl CodeViewScrollbars {
   }
 
   pub(super) fn right_chrome_reserve(&self) -> f32 {
-    self.metrics.hit_thickness
+    self.metrics.edge_reserve()
   }
 
   pub(super) fn vertical_geometry(
