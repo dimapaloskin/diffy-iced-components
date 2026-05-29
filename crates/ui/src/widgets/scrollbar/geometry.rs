@@ -147,12 +147,16 @@ impl ThumbGeometry {
     })
   }
 
-  pub fn offset_for_thumb_start(&self, thumb_start: f32) -> Option<f64> {
+  pub fn clamp_thumb_start(&self, thumb_start: f32) -> Option<f32> {
     if self.travel_len == 0.0 || self.max_scroll <= 0.0 {
       return None;
     }
 
-    let thumb_start = thumb_start.clamp(0.0, self.travel_len);
+    Some(thumb_start.clamp(0.0, self.travel_len))
+  }
+
+  pub fn offset_for_thumb_start(&self, thumb_start: f32) -> Option<f64> {
+    let thumb_start = self.clamp_thumb_start(thumb_start)?;
     let offset = (thumb_start / self.travel_len) as f64 * self.max_scroll;
 
     Some(offset)

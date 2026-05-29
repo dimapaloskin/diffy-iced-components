@@ -47,6 +47,17 @@ impl State {
     matches!(self.interaction, Interaction::Dragging { .. })
   }
 
+  pub fn begin_drag(&mut self, axis: Axis, grab_offset: f32) -> Update {
+    self.interaction = Interaction::Dragging { axis, grab_offset };
+
+    Update {
+      action: None,
+      capture_event: false,
+      request_redraw: true,
+      request_redraw_at: None,
+    }
+  }
+
   pub fn press(&mut self, cursor_position: Point, geometry: &Geometry) -> Update {
     let Some(thumb) = geometry.thumb else {
       return Update::ignored();
@@ -242,11 +253,6 @@ impl State {
       TrackPressRegion::BeforeThumb
     } else {
       TrackPressRegion::AfterThumb
-    };
-
-    self.interaction = Interaction::Dragging {
-      axis,
-      grab_offset: thumb.len / 2.0,
     };
 
     Update {

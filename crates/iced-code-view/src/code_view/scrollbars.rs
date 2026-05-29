@@ -119,38 +119,64 @@ impl CodeViewScrollbars {
     action: scrollbar::Action,
     geometry: Option<&scrollbar::Geometry>,
   ) -> Effect {
-    match action.axis() {
-      scrollbar::Axis::Vertical => self.apply_vertical_action(state, action, geometry),
+    match action {
+      scrollbar::Action::DragTo { axis, offset } => self.apply_axis_offset(state, axis, offset),
+      scrollbar::Action::TrackPress {
+        axis,
+        pointer_offset,
+        ..
+      } => self.apply_track_press(state, pointer_offset, axis, geometry),
+    }
+  }
+
+  fn apply_axis_offset(
+    &self,
+    state: &mut CodeViewState,
+    axis: scrollbar::Axis,
+    offset: f64,
+  ) -> Effect {
+    match axis {
+      scrollbar::Axis::Vertical => {
+        Effect::from_scroll_change(state.scroll.set_vertical_offset_from_px(offset))
+      }
       scrollbar::Axis::Horizontal => Effect::none(),
     }
   }
 
-  fn apply_vertical_action(
+  fn apply_track_press(
     &self,
     state: &mut CodeViewState,
-    action: scrollbar::Action,
+    pointer_offset: f64,
+    axis: scrollbar::Axis,
     geometry: Option<&scrollbar::Geometry>,
   ) -> Effect {
-    match action {
-      scrollbar::Action::DragTo { offset, .. } => {
-        Effect::from_scroll_change(state.scroll.set_vertical_offset_from_px(offset))
-      }
-      scrollbar::Action::TrackPress { pointer_offset, .. } => {
-        let Some(scrollbar::Geometry {
-          thumb: Some(thumb), ..
-        }) = geometry
-        else {
-          return Effect::none();
-        };
-
-        let target_thumb_start = pointer_offset as f32 - thumb.len / 2.0;
-        let Some(offset) = thumb.offset_for_thumb_start(target_thumb_start) else {
-          return Effect::none();
-        };
-
-        Effect::from_scroll_change(state.scroll.set_vertical_offset_from_px(offset))
-      }
+    if axis == scrollbar::Axis::Horizontal {
+      return Effect::none();
     }
+
+    let Some(scrollbar::Geometry {
+      thumb: Some(thumb), ..
+    }) = geometry
+    else {
+      return Effect::none();
+    };
+
+    let target_thumb_start = pointer_offset as f32 - thumb.len / 2.0;
+    let Some(target_thumb_start) = thumb.clamp_thumb_start(target_thumb_start) else {
+      return Effect::none();
+    };
+
+    let Some(offset) = thumb.offset_for_thumb_start(target_thumb_start) else {
+      return Effect::none();
+    };
+
+    let grab_offset = pointer_offset as f32 - target_thumb_start;
+
+    let mut effect = Effect::from_scroll_change(state.scroll.set_vertical_offset_from_px(offset));
+    let update = state.scrollbar.begin_drag(axis, grab_offset);
+    effect.merge(self.apply_update(state, update, None));
+
+    effect
   }
 }
 
