@@ -8,31 +8,31 @@ use diffy_iced_runtime::debounce::{DebounceAction, DebounceToken, Debouncer};
 use diffy_ui::Theme;
 
 use crate::background;
-use crate::code_view::{CodeView, CodeViewInputs};
+use crate::code_view::{CodeView, Inputs};
 use crate::document::Document;
 use crate::gutter::GutterConfig;
-use crate::insets::CodeViewInsets;
+use crate::insets::Insets;
 use crate::measurement::{
   MeasurementKey, MeasurementKind, MeasurementRequest, MeasurementResult, measure_document,
 };
 use crate::policies::TabDisplayPolicy;
-use crate::style::CodeViewStyle;
+use crate::style::Style;
 use crate::text_layout::{TextLayoutConfig, WrapMode};
 
-pub struct CodeViewController {
+pub struct Controller {
   document: Document,
   width: Length,
   height: Length,
   text_layout_config: TextLayoutConfig,
-  insets: CodeViewInsets,
+  insets: Insets,
   border_radius: iced::border::Radius,
   session_id: u64,
   gutter_config: GutterConfig,
-  style: CodeViewStyle,
+  style: Style,
 
   measurement_result: Option<MeasurementResult>,
   active_measurement: Option<ActiveMeasurementJob>,
-  soft_wrap_measurement: Debouncer<MeasurementRequest, CodeViewMessage>,
+  soft_wrap_measurement: Debouncer<MeasurementRequest, Message>,
 }
 
 struct ActiveMeasurementJob {
@@ -50,32 +50,32 @@ impl ActiveMeasurementJob {
 static NEXT_SESSION_ID: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Debug, Clone)]
-pub struct CodeViewMessage {
-  event: CodeViewEvent,
+pub struct Message {
+  event: Event,
 }
 
-impl CodeViewMessage {
+impl Message {
   fn measurement_requested(request: MeasurementRequest) -> Self {
     Self {
-      event: CodeViewEvent::RequestMeasurement { request },
+      event: Event::RequestMeasurement { request },
     }
   }
 
   fn measurement_finished(session_id: u64, result: MeasurementResult) -> Self {
     Self {
-      event: CodeViewEvent::FinishMeasurement { session_id, result },
+      event: Event::FinishMeasurement { session_id, result },
     }
   }
 
   fn measurement_debounce_elapsed(token: DebounceToken) -> Self {
     Self {
-      event: CodeViewEvent::MeasurementDebounceElapsed { token },
+      event: Event::MeasurementDebounceElapsed { token },
     }
   }
 }
 
 #[derive(Debug, Clone)]
-enum CodeViewEvent {
+enum Event {
   RequestMeasurement {
     request: MeasurementRequest,
   },
@@ -88,24 +88,24 @@ enum CodeViewEvent {
   },
 }
 
-impl CodeViewController {
+impl Controller {
   pub fn new(document: Document) -> Self {
     Self {
       document,
       width: Length::Fill,
       height: Length::Fill,
       text_layout_config: TextLayoutConfig::default(),
-      insets: CodeViewInsets::default(),
+      insets: Insets::default(),
       border_radius: iced::border::Radius::default(),
       session_id: next_session_id(),
       gutter_config: GutterConfig::default(),
-      style: CodeViewStyle::default(),
+      style: Style::default(),
 
       measurement_result: None,
       active_measurement: None,
       soft_wrap_measurement: Debouncer::new(
         Duration::from_millis(100),
-        CodeViewMessage::measurement_debounce_elapsed,
+        Message::measurement_debounce_elapsed,
       ),
     }
   }
@@ -161,12 +161,12 @@ impl CodeViewController {
     self.border_radius
   }
 
-  pub fn with_insets(mut self, insets: CodeViewInsets) -> Self {
+  pub fn with_insets(mut self, insets: Insets) -> Self {
     self.insets = insets;
     self
   }
 
-  pub fn set_insets(&mut self, insets: CodeViewInsets) {
+  pub fn set_insets(&mut self, insets: Insets) {
     if self.insets == insets {
       return;
     }
@@ -174,7 +174,7 @@ impl CodeViewController {
     self.insets = insets;
   }
 
-  pub fn insets(&self) -> CodeViewInsets {
+  pub fn insets(&self) -> Insets {
     self.insets
   }
 
@@ -285,12 +285,12 @@ impl CodeViewController {
     self.gutter_config
   }
 
-  pub fn with_style(mut self, style: CodeViewStyle) -> Self {
+  pub fn with_style(mut self, style: Style) -> Self {
     self.style = style;
     self
   }
 
-  pub fn set_style(&mut self, style: CodeViewStyle) {
+  pub fn set_style(&mut self, style: Style) {
     if self.style == style {
       return;
     }
@@ -298,12 +298,12 @@ impl CodeViewController {
     self.style = style;
   }
 
-  pub fn style(&self) -> CodeViewStyle {
+  pub fn style(&self) -> Style {
     self.style
   }
 }
 
-impl CodeViewController {
+impl Controller {
   pub fn set_document(&mut self, document: Document) {
     self.cancel_active_measurement();
 
@@ -324,7 +324,7 @@ impl CodeViewController {
     }
   }
 
-  fn on_measurement_requested(&mut self, request: MeasurementRequest) -> Task<CodeViewMessage> {
+  fn on_measurement_requested(&mut self, request: MeasurementRequest) -> Task<Message> {
     if request.key.document_revision != self.document.revision() {
       return Task::none();
     }
@@ -355,7 +355,7 @@ impl CodeViewController {
     }
   }
 
-  fn start_measurement(&mut self, request: MeasurementRequest) -> Task<CodeViewMessage> {
+  fn start_measurement(&mut self, request: MeasurementRequest) -> Task<Message> {
     self.cancel_active_measurement();
 
     let session_id = self.session_id;
@@ -371,10 +371,7 @@ impl CodeViewController {
     measure_document_task(session_id, request, cancel)
   }
 
-  fn schedule_soft_wrap_measurement(
-    &mut self,
-    request: MeasurementRequest,
-  ) -> Task<CodeViewMessage> {
+  fn schedule_soft_wrap_measurement(&mut self, request: MeasurementRequest) -> Task<Message> {
     match self.soft_wrap_measurement.request(request) {
       DebounceAction::StartNow(request) => self.start_measurement(request),
       DebounceAction::Wait(task) => {
@@ -384,7 +381,7 @@ impl CodeViewController {
     }
   }
 
-  fn on_measurement_debounce_elapsed(&mut self, token: DebounceToken) -> Task<CodeViewMessage> {
+  fn on_measurement_debounce_elapsed(&mut self, token: DebounceToken) -> Task<Message> {
     let Some(request) = self.soft_wrap_measurement.elapsed(token) else {
       return Task::none();
     };
@@ -416,7 +413,7 @@ impl CodeViewController {
     &mut self,
     session_id: u64,
     result: MeasurementResult,
-  ) -> Task<CodeViewMessage> {
+  ) -> Task<Message> {
     let Some(active) = self.active_measurement.as_ref() else {
       return Task::none();
     };
@@ -435,20 +432,18 @@ impl CodeViewController {
     Task::none()
   }
 
-  pub fn update(&mut self, message: CodeViewMessage) -> Task<CodeViewMessage> {
+  pub fn update(&mut self, message: Message) -> Task<Message> {
     match message.event {
-      CodeViewEvent::RequestMeasurement { request } => self.on_measurement_requested(request),
-      CodeViewEvent::FinishMeasurement { session_id, result } => {
+      Event::RequestMeasurement { request } => self.on_measurement_requested(request),
+      Event::FinishMeasurement { session_id, result } => {
         self.on_measurement_finished(session_id, result)
       }
-      CodeViewEvent::MeasurementDebounceElapsed { token } => {
-        self.on_measurement_debounce_elapsed(token)
-      }
+      Event::MeasurementDebounceElapsed { token } => self.on_measurement_debounce_elapsed(token),
     }
   }
 
-  fn widget_inputs(&self) -> CodeViewInputs<'_> {
-    CodeViewInputs {
+  fn widget_inputs(&self) -> Inputs<'_> {
+    Inputs {
       document: &self.document,
       width: self.width,
       height: self.height,
@@ -461,11 +456,11 @@ impl CodeViewController {
     }
   }
 
-  pub fn view<'a, Renderer>(&'a self) -> Element<'a, CodeViewMessage, Theme, Renderer>
+  pub fn view<'a, Renderer>(&'a self) -> Element<'a, Message, Theme, Renderer>
   where
     Renderer: 'a + iced::advanced::renderer::Renderer + iced::advanced::graphics::text::Renderer,
   {
-    CodeView::new(self.widget_inputs(), CodeViewMessage::measurement_requested).into()
+    CodeView::new(self.widget_inputs(), Message::measurement_requested).into()
   }
 }
 
@@ -477,9 +472,9 @@ fn measure_document_task(
   session_id: u64,
   request: MeasurementRequest,
   cancel: Arc<AtomicBool>,
-) -> Task<CodeViewMessage> {
+) -> Task<Message> {
   background::spawn_optional(move || {
     measure_document(request, &cancel)
-      .map(|result| CodeViewMessage::measurement_finished(session_id, result))
+      .map(|result| Message::measurement_finished(session_id, result))
   })
 }

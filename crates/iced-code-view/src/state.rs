@@ -14,7 +14,7 @@ use crate::text_layout::{TextLayoutKey, TextLayoutRequest};
 use crate::viewport::Viewport;
 
 #[derive(Default)]
-pub(crate) struct CodeViewState {
+pub(crate) struct State {
   pub(crate) text_layout: TextLayoutState,
   pub(crate) gutter: GutterState,
   pub(crate) scroll: ScrollModel,
@@ -112,7 +112,7 @@ impl GutterState {
   }
 }
 
-impl CodeViewState {
+impl State {
   pub(crate) fn update_pending_measurement<'a>(
     &mut self,
     request: MeasurementRequest,

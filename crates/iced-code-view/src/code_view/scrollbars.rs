@@ -5,17 +5,17 @@ use iced::time::Instant;
 use diffy_ui::Theme;
 use diffy_ui::widgets::scrollbar;
 
-use super::CodeViewInputs;
+use super::Inputs;
 use super::effect::Effect;
-use crate::state::CodeViewState;
+use crate::state::State;
 
-pub(super) struct CodeViewScrollbars {
+pub(super) struct Scrollbars {
   metrics: scrollbar::Metrics,
   behavior: scrollbar::Behavior,
 }
 
-impl CodeViewScrollbars {
-  pub(super) fn from_inputs(_inputs: &CodeViewInputs) -> Self {
+impl Scrollbars {
+  pub(super) fn from_inputs(_inputs: &Inputs) -> Self {
     Self {
       metrics: scrollbar::Metrics::default(),
       behavior: scrollbar::Behavior::default(),
@@ -28,7 +28,7 @@ impl CodeViewScrollbars {
 
   pub(super) fn vertical_geometry(
     &self,
-    state: &CodeViewState,
+    state: &State,
     widget_bounds: iced::Rectangle,
   ) -> scrollbar::Geometry {
     let snapshot = state
@@ -40,7 +40,7 @@ impl CodeViewScrollbars {
 
   pub(super) fn draw_vertical_overlay<Renderer>(
     &self,
-    state: &CodeViewState,
+    state: &State,
     renderer: &mut Renderer,
     theme: &Theme,
     widget_bounds: iced::Rectangle,
@@ -60,14 +60,14 @@ impl CodeViewScrollbars {
   }
 
   pub(super) fn note_activity(&self, tree: &mut widget::Tree, now: Instant) -> Effect {
-    let state = tree.state.downcast_mut::<CodeViewState>();
+    let state = tree.state.downcast_mut::<State>();
     let update = state.scrollbar.note_activity(now);
 
     self.apply_update(state, update, None)
   }
 
   pub(super) fn on_redraw_requested(&self, tree: &mut widget::Tree, now: Instant) -> Effect {
-    let state = tree.state.downcast_mut::<CodeViewState>();
+    let state = tree.state.downcast_mut::<State>();
     let update = state.scrollbar.redraw_requested(now, self.behavior);
 
     self.apply_update(state, update, None)
@@ -75,7 +75,7 @@ impl CodeViewScrollbars {
 
   fn apply_pointer_update(
     &self,
-    state: &mut CodeViewState,
+    state: &mut State,
     update: scrollbar::Update,
     geometry: &scrollbar::Geometry,
     now: Instant,
@@ -95,7 +95,7 @@ impl CodeViewScrollbars {
 
   fn apply_update(
     &self,
-    state: &mut CodeViewState,
+    state: &mut State,
     update: scrollbar::Update,
     geometry: Option<&scrollbar::Geometry>,
   ) -> Effect {
@@ -115,7 +115,7 @@ impl CodeViewScrollbars {
 
   fn apply_action(
     &self,
-    state: &mut CodeViewState,
+    state: &mut State,
     action: scrollbar::Action,
     geometry: Option<&scrollbar::Geometry>,
   ) -> Effect {
@@ -129,12 +129,7 @@ impl CodeViewScrollbars {
     }
   }
 
-  fn apply_axis_offset(
-    &self,
-    state: &mut CodeViewState,
-    axis: scrollbar::Axis,
-    offset: f64,
-  ) -> Effect {
+  fn apply_axis_offset(&self, state: &mut State, axis: scrollbar::Axis, offset: f64) -> Effect {
     match axis {
       scrollbar::Axis::Vertical => {
         Effect::from_scroll_change(state.scroll.set_vertical_offset_from_px(offset))
@@ -145,7 +140,7 @@ impl CodeViewScrollbars {
 
   fn apply_track_press(
     &self,
-    state: &mut CodeViewState,
+    state: &mut State,
     pointer_offset: f64,
     axis: scrollbar::Axis,
     geometry: Option<&scrollbar::Geometry>,
@@ -180,7 +175,7 @@ impl CodeViewScrollbars {
   }
 }
 
-impl CodeViewScrollbars {
+impl Scrollbars {
   pub(super) fn on_press(
     &self,
     tree: &mut widget::Tree,
@@ -192,7 +187,7 @@ impl CodeViewScrollbars {
     };
 
     let now = Instant::now();
-    let state = tree.state.downcast_mut::<CodeViewState>();
+    let state = tree.state.downcast_mut::<State>();
     let geometry = self.vertical_geometry(state, widget_bounds);
 
     if !state.scrollbar.is_visible(&geometry, self.behavior) {
@@ -210,7 +205,7 @@ impl CodeViewScrollbars {
     cursor: iced::advanced::mouse::Cursor,
   ) -> Effect {
     let now = Instant::now();
-    let state = tree.state.downcast_mut::<CodeViewState>();
+    let state = tree.state.downcast_mut::<State>();
     let geometry = self.vertical_geometry(state, widget_bounds);
 
     let update = if state.scrollbar.is_dragging() {
@@ -234,7 +229,7 @@ impl CodeViewScrollbars {
     widget_bounds: iced::Rectangle,
   ) -> Effect {
     let now = Instant::now();
-    let state = tree.state.downcast_mut::<CodeViewState>();
+    let state = tree.state.downcast_mut::<State>();
     let geometry = self.vertical_geometry(state, widget_bounds);
 
     let update = state.scrollbar.cursor_moved(None, &geometry, now);
@@ -249,7 +244,7 @@ impl CodeViewScrollbars {
     cursor: iced::advanced::mouse::Cursor,
   ) -> Effect {
     let now = Instant::now();
-    let state = tree.state.downcast_mut::<CodeViewState>();
+    let state = tree.state.downcast_mut::<State>();
     let geometry = self.vertical_geometry(state, widget_bounds);
     let update = state.scrollbar.release(cursor.position(), &geometry);
 

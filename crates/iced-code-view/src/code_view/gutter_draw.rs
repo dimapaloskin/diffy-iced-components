@@ -4,13 +4,13 @@ use iced::advanced::graphics::text::{self, Renderer as TextRendererTrait};
 use iced::advanced::renderer::{Quad, Renderer as RendererTrait};
 
 use super::CodeView;
-use crate::state::CodeViewState;
+use crate::state::State;
 use crate::viewport::ViewportArea;
 
 impl<'a, Message> CodeView<'a, Message> {
   pub(super) fn draw_gutter<Renderer>(
     &self,
-    state: &CodeViewState,
+    state: &State,
     renderer: &mut Renderer,
     widget_bounds: iced::Rectangle,
     viewport: &iced::Rectangle,
@@ -44,7 +44,7 @@ impl<'a, Message> CodeView<'a, Message> {
 
   fn draw_gutter_separator<Renderer>(
     &self,
-    state: &CodeViewState,
+    state: &State,
     renderer: &mut Renderer,
     gutter_area: ViewportArea,
     viewport: &iced::Rectangle,
@@ -86,7 +86,7 @@ impl<'a, Message> CodeView<'a, Message> {
 
   fn draw_gutter_labels<Renderer>(
     &self,
-    state: &CodeViewState,
+    state: &State,
     renderer: &mut Renderer,
     gutter_area: ViewportArea,
     viewport: &iced::Rectangle,

@@ -1,5 +1,5 @@
 use crate::gutter::GutterMetrics;
-use crate::insets::CodeViewInsets;
+use crate::insets::Insets;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub(crate) struct ViewportArea {
@@ -25,7 +25,7 @@ pub(crate) struct Viewport {
 impl Viewport {
   pub(crate) fn new(
     widget_size: iced::Size,
-    insets: CodeViewInsets,
+    insets: Insets,
     gutter: GutterMetrics,
     right_chrome_reserve: f32,
   ) -> Self {
@@ -132,7 +132,7 @@ mod tests {
   fn viewport_splits_surface_gutter_text_and_content_bounds() {
     let viewport = Viewport::new(
       iced::Size::new(200.0, 100.0),
-      CodeViewInsets::new(
+      Insets::new(
         VerticalInsets::new(5.0, 11.0),
         HorizontalInsets::new(13.0, 7.0),
       ),
@@ -186,7 +186,7 @@ mod tests {
   fn viewport_clamps_gutter_to_surface_width() {
     let viewport = Viewport::new(
       iced::Size::new(10.0, 40.0),
-      CodeViewInsets::new(
+      Insets::new(
         VerticalInsets::new(2.0, 3.0),
         HorizontalInsets::new(5.0, 4.0),
       ),
@@ -240,7 +240,7 @@ mod tests {
   fn right_chrome_reserve_reduces_text_area_without_touching_gutter() {
     let viewport = Viewport::new(
       iced::Size::new(200.0, 100.0),
-      CodeViewInsets::new(
+      Insets::new(
         VerticalInsets::new(5.0, 11.0),
         HorizontalInsets::new(13.0, 7.0),
       ),

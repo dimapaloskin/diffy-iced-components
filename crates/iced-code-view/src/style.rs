@@ -1,11 +1,11 @@
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct CodeViewStyle {
+pub struct Style {
   pub background_color: iced::Color,
   pub text_color: iced::Color,
   pub gutter: GutterStyle,
 }
 
-impl Default for CodeViewStyle {
+impl Default for Style {
   fn default() -> Self {
     Self {
       background_color: iced::Color::BLACK,

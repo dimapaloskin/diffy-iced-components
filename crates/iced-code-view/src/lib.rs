@@ -15,10 +15,10 @@ mod style;
 mod text_layout;
 mod viewport;
 
-pub use controller::{CodeViewController, CodeViewMessage};
+pub use controller::{Message, Controller};
 pub use document::Document;
 pub use gutter::{GutterConfig, GutterContent, GutterVisibility};
-pub use insets::{CodeViewInsets, GutterInsets, HorizontalInsets, VerticalInsets};
+pub use insets::{GutterInsets, HorizontalInsets, Insets, VerticalInsets};
 pub use policies::{LineEndingPolicy, TabDisplayPolicy};
-pub use style::{CodeViewStyle, GutterStyle};
+pub use style::{GutterStyle, Style};
 pub use text_layout::WrapMode;

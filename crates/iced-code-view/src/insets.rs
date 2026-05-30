@@ -1,5 +1,5 @@
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct CodeViewInsets {
+pub struct Insets {
   // Top/bottom gap for text and gutter labels.
   // Background still fills the whole widget.
   pub vertical: VerticalInsets,
@@ -7,7 +7,7 @@ pub struct CodeViewInsets {
   pub text: HorizontalInsets,
 }
 
-impl CodeViewInsets {
+impl Insets {
   pub const ZERO: Self = Self {
     vertical: VerticalInsets::ZERO,
     text: HorizontalInsets::ZERO,
@@ -21,7 +21,7 @@ impl CodeViewInsets {
   }
 }
 
-impl Default for CodeViewInsets {
+impl Default for Insets {
   fn default() -> Self {
     Self::ZERO
   }

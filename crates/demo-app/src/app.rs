@@ -11,15 +11,14 @@ use diffy_ui::Theme;
 use diffy_ui::widgets::button::Variant as ButtonVariant;
 
 use iced_code_view::{
-  CodeViewController, CodeViewInsets, CodeViewMessage, CodeViewStyle, Document, GutterConfig,
-  GutterInsets, WrapMode,
+  Controller, Document, GutterConfig, GutterInsets, Insets, Message, Style, WrapMode,
 };
 
 use crate::files;
 
 #[derive(Debug, Clone)]
 pub enum AppMessage {
-  CodeView(CodeViewMessage),
+  CodeView(Message),
   SelectFile(usize),
   TabPressed { shift: bool },
   UseSystemTheme,
@@ -45,7 +44,7 @@ impl ThemeMode {
 }
 
 pub struct App {
-  code_view: CodeViewController,
+  code_view: Controller,
   selected_file: usize,
   theme_override: Option<ThemeMode>,
 }
@@ -58,7 +57,7 @@ impl App {
       ..Default::default()
     };
 
-    let style = CodeViewStyle {
+    let style = Style {
       gutter: iced_code_view::GutterStyle {
         background_color: iced::Color::TRANSPARENT,
         separator_color: iced::Color::from_rgb(0.35, 0.35, 0.35),
@@ -68,14 +67,14 @@ impl App {
       ..Default::default()
     };
 
-    let code_view = CodeViewController::new(Document::new(files::read_demo_file(0)))
+    let code_view = Controller::new(Document::new(files::read_demo_file(0)))
       .with_border_radius(iced::border::radius(10.0))
       .with_font_size(13.0)
       .with_line_height(20.0)
       .with_gutter_config(gutter_config)
       .with_style(style)
       .with_wrap_mode(iced_code_view::WrapMode::SoftWrap)
-      .with_insets(CodeViewInsets::new(0.0, 8.0));
+      .with_insets(Insets::new(0.0, 8.0));
 
     (
       Self {

@@ -18,37 +18,37 @@ use diffy_ui::Theme;
 
 use crate::document::Document;
 use crate::gutter::{GutterConfig, GutterMetricsRequest, GutterRenderArtifactRequest};
-use crate::insets::CodeViewInsets;
+use crate::insets::Insets;
 use crate::measurement::{MeasurementRequest, MeasurementResult};
 use crate::scroll::ScrollMapInputs;
-use crate::state::CodeViewState;
-use crate::style::CodeViewStyle;
+use crate::state::State;
+use crate::style::Style;
 use crate::text_layout::{TextLayoutConfig, TextLayoutRequest};
 use crate::viewport::Viewport;
 
 use self::effect::Effect;
-use self::scrollbars::CodeViewScrollbars;
+use self::scrollbars::Scrollbars;
 
 pub(crate) struct CodeView<'a, Message> {
-  inputs: CodeViewInputs<'a>,
+  inputs: Inputs<'a>,
   on_measure_request: fn(MeasurementRequest) -> Message,
 }
 
-pub(crate) struct CodeViewInputs<'a> {
+pub(crate) struct Inputs<'a> {
   pub(crate) document: &'a Document,
   pub(crate) width: Length,
   pub(crate) height: Length,
   pub(crate) text_layout_config: TextLayoutConfig,
-  pub(crate) insets: CodeViewInsets,
+  pub(crate) insets: Insets,
   pub(crate) border_radius: iced::border::Radius,
   pub(crate) gutter_config: GutterConfig,
-  pub(crate) style: CodeViewStyle,
+  pub(crate) style: Style,
   pub(crate) measurement_result: Option<&'a MeasurementResult>,
 }
 
 impl<'a, Message> CodeView<'a, Message> {
   pub(crate) fn new(
-    inputs: CodeViewInputs<'a>,
+    inputs: Inputs<'a>,
     on_measure_request: fn(MeasurementRequest) -> Message,
   ) -> Self {
     Self {
@@ -67,11 +67,11 @@ where
   }
 
   fn tag(&self) -> iced::advanced::widget::tree::Tag {
-    widget::tree::Tag::of::<CodeViewState>()
+    widget::tree::Tag::of::<State>()
   }
 
   fn state(&self) -> widget::tree::State {
-    widget::tree::State::new(CodeViewState::default())
+    widget::tree::State::new(State::default())
   }
 
   fn update(
@@ -96,22 +96,22 @@ where
         self.on_mouse_wheel(tree, delta, layout, cursor, shell);
       }
       Event::Mouse(MouseEvent::ButtonPressed(Button::Left)) => {
-        CodeViewScrollbars::from_inputs(&self.inputs)
+        Scrollbars::from_inputs(&self.inputs)
           .on_press(tree, layout.bounds(), cursor)
           .apply(shell);
       }
       Event::Mouse(MouseEvent::CursorMoved { .. }) => {
-        CodeViewScrollbars::from_inputs(&self.inputs)
+        Scrollbars::from_inputs(&self.inputs)
           .on_cursor_moved(tree, layout.bounds(), cursor)
           .apply(shell);
       }
       Event::Mouse(MouseEvent::CursorLeft) => {
-        CodeViewScrollbars::from_inputs(&self.inputs)
+        Scrollbars::from_inputs(&self.inputs)
           .on_cursor_left(tree, layout.bounds())
           .apply(shell);
       }
       Event::Mouse(MouseEvent::ButtonReleased(Button::Left)) => {
-        CodeViewScrollbars::from_inputs(&self.inputs)
+        Scrollbars::from_inputs(&self.inputs)
           .on_release(tree, layout.bounds(), cursor)
           .apply(shell);
       }
@@ -125,7 +125,7 @@ where
     _renderer: &Renderer,
     limits: &iced::advanced::layout::Limits,
   ) -> layout::Node {
-    let CodeViewInputs {
+    let Inputs {
       document,
       width,
       height,
@@ -136,7 +136,7 @@ where
       ..
     } = self.inputs;
 
-    let state = tree.state.downcast_mut::<CodeViewState>();
+    let state = tree.state.downcast_mut::<State>();
     let resolved_size = limits.resolve(width, height, iced::Size::ZERO);
     let gutter_metrics = state.gutter.ensure_metrics(GutterMetricsRequest {
       document,
@@ -147,7 +147,7 @@ where
       .text_layout
       .visible_layout()
       .is_some_and(|entry| entry.key.document_revision != self.inputs.document.revision());
-    let scrollbars = CodeViewScrollbars::from_inputs(&self.inputs);
+    let scrollbars = Scrollbars::from_inputs(&self.inputs);
 
     let viewport = Viewport::new(
       resolved_size,
@@ -231,7 +231,7 @@ where
   ) {
     use iced::advanced::renderer::Quad;
 
-    let state = tree.state.downcast_ref::<CodeViewState>();
+    let state = tree.state.downcast_ref::<State>();
     let bounds = layout.bounds();
     let Some(visible_bounds) = bounds.intersection(viewport) else {
       return;
@@ -269,7 +269,7 @@ where
       });
     }
 
-    let scrollbars = CodeViewScrollbars::from_inputs(&self.inputs);
+    let scrollbars = Scrollbars::from_inputs(&self.inputs);
     scrollbars.draw_vertical_overlay(state, renderer, theme, bounds);
   }
 }
@@ -302,14 +302,14 @@ impl<'a, Message> CodeView<'a, Message> {
 
     let mut effect = Effect::capture_event();
     let delta = self.scroll_delta_to_pixels(delta);
-    let state = tree.state.downcast_mut::<CodeViewState>();
+    let state = tree.state.downcast_mut::<State>();
     let scroll_viewport = state.viewport.scroll_viewport_size();
 
     effect.merge(Effect::from_scroll_change(
       state.scroll.apply_wheel_delta(delta, scroll_viewport),
     ));
 
-    effect.merge(CodeViewScrollbars::from_inputs(&self.inputs).note_activity(tree, Instant::now()));
+    effect.merge(Scrollbars::from_inputs(&self.inputs).note_activity(tree, Instant::now()));
 
     effect.apply(shell);
   }
@@ -321,11 +321,11 @@ impl<'a, Message> CodeView<'a, Message> {
     now: iced::time::Instant,
     shell: &mut iced::advanced::Shell<'_, Message>,
   ) {
-    CodeViewScrollbars::from_inputs(&self.inputs)
+    Scrollbars::from_inputs(&self.inputs)
       .on_redraw_requested(tree, now)
       .apply(shell);
 
-    let state = tree.state.downcast_mut::<CodeViewState>();
+    let state = tree.state.downcast_mut::<State>();
 
     if let Some(request) = state.measurement_request_to_publish() {
       shell.publish((self.on_measure_request)(request));
