@@ -270,7 +270,7 @@ where
     }
 
     let scrollbars = Scrollbars::from_inputs(&self.inputs);
-    scrollbars.draw_vertical_overlay(state, renderer, theme, bounds);
+    scrollbars.draw_overlays(state, renderer, theme, bounds);
   }
 }
 

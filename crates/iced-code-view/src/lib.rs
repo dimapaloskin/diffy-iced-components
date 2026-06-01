@@ -15,7 +15,7 @@ mod style;
 mod text_layout;
 mod viewport;
 
-pub use controller::{Message, Controller};
+pub use controller::{Controller, Message};
 pub use document::Document;
 pub use gutter::{GutterConfig, GutterContent, GutterVisibility};
 pub use insets::{GutterInsets, HorizontalInsets, Insets, VerticalInsets};

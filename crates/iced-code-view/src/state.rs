@@ -35,6 +35,22 @@ pub(crate) struct ScrollbarStates {
   pub(crate) horizontal: scrollbar::State,
 }
 
+impl ScrollbarStates {
+  pub(crate) fn for_axis(&self, axis: scrollbar::Axis) -> &scrollbar::State {
+    match axis {
+      scrollbar::Axis::Vertical => &self.vertical,
+      scrollbar::Axis::Horizontal => &self.horizontal,
+    }
+  }
+
+  pub(crate) fn for_axis_mut(&mut self, axis: scrollbar::Axis) -> &mut scrollbar::State {
+    match axis {
+      scrollbar::Axis::Vertical => &mut self.vertical,
+      scrollbar::Axis::Horizontal => &mut self.horizontal,
+    }
+  }
+}
+
 impl TextLayoutState {
   pub(crate) fn ensure_visible_layout(
     &mut self,

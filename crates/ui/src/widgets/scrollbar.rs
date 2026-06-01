@@ -39,6 +39,13 @@ impl Axis {
       Axis::Horizontal => bounds.width,
     }
   }
+
+  pub fn len_of_size(self, size: iced::Size) -> f32 {
+    match self {
+      Axis::Vertical => size.height,
+      Axis::Horizontal => size.width,
+    }
+  }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]

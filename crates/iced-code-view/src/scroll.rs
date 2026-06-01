@@ -125,12 +125,20 @@ impl ScrollModel {
     }
   }
 
-  pub(crate) fn vertical_scrollbar_snapshot(
+  pub(crate) fn scrollbar_snapshot(
     &self,
-    viewport_height: f32,
+    axis: scrollbar::Axis,
+    viewport_size: iced::Size,
   ) -> scrollbar::AxisSnapshot {
-    let viewport_len = viewport_height.max(0.0) as f64;
+    let viewport_len = axis.len_of_size(viewport_size).max(0.0) as f64;
 
+    match axis {
+      scrollbar::Axis::Vertical => self.vertical_scrollbar_snapshot(viewport_len),
+      scrollbar::Axis::Horizontal => self.horizontal_scrollbar_snapshot(viewport_len),
+    }
+  }
+
+  fn vertical_scrollbar_snapshot(&self, viewport_len: f64) -> scrollbar::AxisSnapshot {
     match &self.map.vertical {
       map::VerticalMap::Trivial {
         source_line_count,
@@ -158,7 +166,46 @@ impl ScrollModel {
     }
   }
 
-  pub(crate) fn set_vertical_offset_from_px(&mut self, offset_px: f64) -> Option<ScrollChange> {
+  fn horizontal_scrollbar_snapshot(&self, viewport_len: f64) -> scrollbar::AxisSnapshot {
+    let offset = self.state.horizontal_px.max(0.0) as f64;
+
+    match &self.map.horizontal {
+      map::HorizontalMap::Disabled => scrollbar::AxisSnapshot {
+        axis: scrollbar::Axis::Horizontal,
+        offset: 0.0,
+        viewport_len,
+        extent: scrollbar::ScrollExtent::Disabled,
+      },
+      map::HorizontalMap::Unknown { .. } => scrollbar::AxisSnapshot {
+        axis: scrollbar::Axis::Horizontal,
+        offset,
+        viewport_len,
+        extent: scrollbar::ScrollExtent::Unknown,
+      },
+      map::HorizontalMap::Exact { content_width, .. } => scrollbar::AxisSnapshot {
+        axis: scrollbar::Axis::Horizontal,
+        offset,
+        viewport_len,
+        extent: scrollbar::ScrollExtent::Exact {
+          content_len: f64::from(content_width.max(0.0)),
+        },
+      },
+    }
+  }
+
+  pub(crate) fn set_scrollbar_offset(
+    &mut self,
+    axis: scrollbar::Axis,
+    offset_px: f64,
+    viewport_size: iced::Size,
+  ) -> Option<ScrollChange> {
+    match axis {
+      scrollbar::Axis::Vertical => self.set_vertical_offset_from_px(offset_px),
+      scrollbar::Axis::Horizontal => self.set_horizontal_offset_from_px(offset_px, viewport_size),
+    }
+  }
+
+  fn set_vertical_offset_from_px(&mut self, offset_px: f64) -> Option<ScrollChange> {
     let map::VerticalMap::Trivial {
       source_line_count,
       line_height,
@@ -189,6 +236,28 @@ impl ScrollModel {
 
     self.state.vertical = target;
     Some(ScrollChange::RequiresLayout)
+  }
+
+  fn set_horizontal_offset_from_px(
+    &mut self,
+    offset_px: f64,
+    viewport_size: iced::Size,
+  ) -> Option<ScrollChange> {
+    if !offset_px.is_finite() {
+      return None;
+    }
+
+    let next = self
+      .map
+      .horizontal
+      .clamp_offset(offset_px as f32, viewport_size.width);
+
+    if next == self.state.horizontal_px {
+      return None;
+    }
+
+    self.state.horizontal_px = next;
+    Some(ScrollChange::RedrawOnly)
   }
 }
 
