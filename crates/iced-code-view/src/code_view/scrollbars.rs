@@ -50,25 +50,38 @@ impl Scrollbars {
     let geometry = self.vertical_geometry(state, widget_bounds);
     let style = scrollbar::Style::resolve(theme);
 
-    if !state.scrollbar.is_visible(&geometry, self.behavior) {
+    if !state
+      .scrollbars
+      .vertical
+      .is_visible(&geometry, self.behavior)
+    {
       return;
     }
 
     renderer.with_layer(widget_bounds, |renderer| {
-      scrollbar::draw(renderer, &geometry, &style, state.scrollbar.status(), 1.0);
+      scrollbar::draw(
+        renderer,
+        &geometry,
+        &style,
+        state.scrollbars.vertical.status(),
+        1.0,
+      );
     });
   }
 
   pub(super) fn note_activity(&self, tree: &mut widget::Tree, now: Instant) -> Effect {
     let state = tree.state.downcast_mut::<State>();
-    let update = state.scrollbar.note_activity(now);
+    let update = state.scrollbars.vertical.note_activity(now);
 
     self.apply_update(state, update, None)
   }
 
   pub(super) fn on_redraw_requested(&self, tree: &mut widget::Tree, now: Instant) -> Effect {
     let state = tree.state.downcast_mut::<State>();
-    let update = state.scrollbar.redraw_requested(now, self.behavior);
+    let update = state
+      .scrollbars
+      .vertical
+      .redraw_requested(now, self.behavior);
 
     self.apply_update(state, update, None)
   }
@@ -86,7 +99,7 @@ impl Scrollbars {
     // A captured scrollbar event means the user interacted with it,
     // so auto-hide activity is refreshed too.
     if captured {
-      let update = state.scrollbar.note_activity(now);
+      let update = state.scrollbars.vertical.note_activity(now);
       effect.merge(self.apply_update(state, update, None));
     }
 
@@ -168,7 +181,7 @@ impl Scrollbars {
     let grab_offset = pointer_offset as f32 - target_thumb_start;
 
     let mut effect = Effect::from_scroll_change(state.scroll.set_vertical_offset_from_px(offset));
-    let update = state.scrollbar.begin_drag(axis, grab_offset);
+    let update = state.scrollbars.vertical.begin_drag(axis, grab_offset);
     effect.merge(self.apply_update(state, update, None));
 
     effect
@@ -190,11 +203,15 @@ impl Scrollbars {
     let state = tree.state.downcast_mut::<State>();
     let geometry = self.vertical_geometry(state, widget_bounds);
 
-    if !state.scrollbar.is_visible(&geometry, self.behavior) {
+    if !state
+      .scrollbars
+      .vertical
+      .is_visible(&geometry, self.behavior)
+    {
       return Effect::none();
     }
 
-    let update = state.scrollbar.press(cursor_position, &geometry);
+    let update = state.scrollbars.vertical.press(cursor_position, &geometry);
     self.apply_pointer_update(state, update, &geometry, now)
   }
 
@@ -208,15 +225,19 @@ impl Scrollbars {
     let state = tree.state.downcast_mut::<State>();
     let geometry = self.vertical_geometry(state, widget_bounds);
 
-    let update = if state.scrollbar.is_dragging() {
+    let update = if state.scrollbars.vertical.is_dragging() {
       let Some(cursor_position) = cursor.position() else {
         return Effect::none();
       };
 
-      state.scrollbar.drag_to(cursor_position, &geometry)
+      state
+        .scrollbars
+        .vertical
+        .drag_to(cursor_position, &geometry)
     } else {
       state
-        .scrollbar
+        .scrollbars
+        .vertical
         .cursor_moved(cursor.position(), &geometry, now)
     };
 
@@ -232,7 +253,7 @@ impl Scrollbars {
     let state = tree.state.downcast_mut::<State>();
     let geometry = self.vertical_geometry(state, widget_bounds);
 
-    let update = state.scrollbar.cursor_moved(None, &geometry, now);
+    let update = state.scrollbars.vertical.cursor_moved(None, &geometry, now);
 
     self.apply_pointer_update(state, update, &geometry, now)
   }
@@ -246,7 +267,10 @@ impl Scrollbars {
     let now = Instant::now();
     let state = tree.state.downcast_mut::<State>();
     let geometry = self.vertical_geometry(state, widget_bounds);
-    let update = state.scrollbar.release(cursor.position(), &geometry);
+    let update = state
+      .scrollbars
+      .vertical
+      .release(cursor.position(), &geometry);
 
     self.apply_pointer_update(state, update, &geometry, now)
   }

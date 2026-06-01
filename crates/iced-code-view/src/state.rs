@@ -18,7 +18,7 @@ pub(crate) struct State {
   pub(crate) text_layout: TextLayoutState,
   pub(crate) gutter: GutterState,
   pub(crate) scroll: ScrollModel,
-  pub(crate) scrollbar: scrollbar::State,
+  pub(crate) scrollbars: ScrollbarStates,
   pub(crate) viewport: Viewport,
   pub(crate) pending_measurement_request: Option<MeasurementRequest>,
   pub(crate) last_published_measurement_key: Option<MeasurementKey>,
@@ -27,6 +27,12 @@ pub(crate) struct State {
 #[derive(Default)]
 pub(crate) struct TextLayoutState {
   visible_layout: Option<VisibleTextLayout>,
+}
+
+#[derive(Default)]
+pub(crate) struct ScrollbarStates {
+  pub(crate) vertical: scrollbar::State,
+  pub(crate) horizontal: scrollbar::State,
 }
 
 impl TextLayoutState {
