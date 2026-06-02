@@ -39,6 +39,18 @@ impl Scrollbars {
     scrollbar::Geometry::new(snapshot, placement_bounds, self.metrics)
   }
 
+  fn placement_bounds(
+    &self,
+    state: &State,
+    axis: scrollbar::Axis,
+    widget_bounds: iced::Rectangle,
+  ) -> iced::Rectangle {
+    match axis {
+      scrollbar::Axis::Vertical => widget_bounds,
+      scrollbar::Axis::Horizontal => state.viewport.absolute_text_content_bounds(widget_bounds),
+    }
+  }
+
   pub(super) fn draw_overlays<Renderer>(
     &self,
     state: &State,
@@ -48,14 +60,18 @@ impl Scrollbars {
   ) where
     Renderer: RendererTrait,
   {
-    self.draw_axis_overlay(
-      state,
-      renderer,
-      theme,
-      scrollbar::Axis::Vertical,
-      widget_bounds,
-      widget_bounds,
-    );
+    for axis in [scrollbar::Axis::Vertical, scrollbar::Axis::Horizontal] {
+      let placement_bounds = self.placement_bounds(state, axis, widget_bounds);
+
+      self.draw_axis_overlay(
+        state,
+        renderer,
+        theme,
+        axis,
+        placement_bounds,
+        widget_bounds,
+      );
+    }
   }
 
   fn draw_axis_overlay<Renderer>(
@@ -82,12 +98,14 @@ impl Scrollbars {
     });
   }
 
-  pub(super) fn note_activity(&self, tree: &mut widget::Tree, now: Instant) -> Effect {
+  pub(super) fn note_activity(
+    &self,
+    tree: &mut widget::Tree,
+    axis: scrollbar::Axis,
+    now: Instant,
+  ) -> Effect {
     let state = tree.state.downcast_mut::<State>();
-    let update = state
-      .scrollbars
-      .for_axis_mut(scrollbar::Axis::Vertical)
-      .note_activity(now);
+    let update = state.scrollbars.for_axis_mut(axis).note_activity(now);
 
     self.apply_update(state, update, None)
   }

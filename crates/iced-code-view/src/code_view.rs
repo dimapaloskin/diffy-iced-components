@@ -15,6 +15,7 @@ use iced::mouse::ScrollDelta;
 use iced::time::Instant;
 
 use diffy_ui::Theme;
+use diffy_ui::widgets::scrollbar;
 
 use crate::document::Document;
 use crate::gutter::{GutterConfig, GutterMetricsRequest, GutterRenderArtifactRequest};
@@ -301,15 +302,24 @@ impl<'a, Message> CodeView<'a, Message> {
     }
 
     let mut effect = Effect::capture_event();
-    let delta = self.scroll_delta_to_pixels(delta);
+    let wheel_delta = self.scroll_delta_to_pixels(delta);
     let state = tree.state.downcast_mut::<State>();
     let scroll_viewport = state.viewport.scroll_viewport_size();
 
     effect.merge(Effect::from_scroll_change(
-      state.scroll.apply_wheel_delta(delta, scroll_viewport),
+      state.scroll.apply_wheel_delta(wheel_delta, scroll_viewport),
     ));
 
-    effect.merge(Scrollbars::from_inputs(&self.inputs).note_activity(tree, Instant::now()));
+    let scrollbars = Scrollbars::from_inputs(&self.inputs);
+    let now = Instant::now();
+
+    if wheel_delta.y != 0.0 {
+      effect.merge(scrollbars.note_activity(tree, scrollbar::Axis::Vertical, now));
+    }
+
+    if wheel_delta.x != 0.0 {
+      effect.merge(scrollbars.note_activity(tree, scrollbar::Axis::Horizontal, now));
+    }
 
     effect.apply(shell);
   }
