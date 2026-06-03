@@ -39,6 +39,16 @@ impl Scrollbars {
     scrollbar::Geometry::new(snapshot, placement_bounds, self.metrics)
   }
 
+  fn axis_geometry(
+    &self,
+    state: &State,
+    axis: scrollbar::Axis,
+    widget_bounds: iced::Rectangle,
+  ) -> scrollbar::Geometry {
+    let placement_bounds = self.placement_bounds(state, axis, widget_bounds);
+    self.geometry(state, axis, placement_bounds)
+  }
+
   fn placement_bounds(
     &self,
     state: &State,
@@ -49,6 +59,35 @@ impl Scrollbars {
       scrollbar::Axis::Vertical => widget_bounds,
       scrollbar::Axis::Horizontal => state.viewport.absolute_text_content_bounds(widget_bounds),
     }
+  }
+
+  fn target_axis_at(
+    &self,
+    state: &State,
+    widget_bounds: iced::Rectangle,
+    cursor_position: iced::Point,
+  ) -> Option<(scrollbar::Axis, scrollbar::Geometry)> {
+    for axis in [scrollbar::Axis::Horizontal, scrollbar::Axis::Vertical] {
+      let geometry = self.axis_geometry(state, axis, widget_bounds);
+
+      let is_visible = state
+        .scrollbars
+        .for_axis(axis)
+        .is_visible(&geometry, self.behavior);
+      let is_hovering = geometry.track_bounds.contains(cursor_position);
+
+      if is_visible && is_hovering {
+        return Some((axis, geometry));
+      }
+    }
+
+    None
+  }
+
+  fn dragging_axis(&self, state: &State) -> Option<scrollbar::Axis> {
+    [scrollbar::Axis::Horizontal, scrollbar::Axis::Vertical]
+      .into_iter()
+      .find(|&axis| state.scrollbars.for_axis(axis).is_dragging())
   }
 
   pub(super) fn draw_overlays<Renderer>(
@@ -200,14 +239,15 @@ impl Scrollbars {
     axis: scrollbar::Axis,
     geometry: Option<&scrollbar::Geometry>,
   ) -> Effect {
-    if axis == scrollbar::Axis::Horizontal {
+    let Some(geometry) = geometry else {
+      return Effect::none();
+    };
+
+    if geometry.axis != axis {
       return Effect::none();
     }
 
-    let Some(scrollbar::Geometry {
-      thumb: Some(thumb), ..
-    }) = geometry
-    else {
+    let Some(thumb) = geometry.thumb else {
       return Effect::none();
     };
 
@@ -227,10 +267,12 @@ impl Scrollbars {
       offset,
       state.viewport.scroll_viewport_size(),
     ));
+
     let update = state
       .scrollbars
       .for_axis_mut(axis)
       .begin_drag(axis, grab_offset);
+
     effect.merge(self.apply_update(state, update, None));
 
     effect
@@ -250,21 +292,15 @@ impl Scrollbars {
 
     let now = Instant::now();
     let state = tree.state.downcast_mut::<State>();
-    let axis = scrollbar::Axis::Vertical;
-    let geometry = self.geometry(state, axis, widget_bounds);
-
-    if !state
-      .scrollbars
-      .for_axis(axis)
-      .is_visible(&geometry, self.behavior)
-    {
+    let Some((axis, geometry)) = self.target_axis_at(state, widget_bounds, cursor_position) else {
       return Effect::none();
-    }
+    };
 
     let update = state
       .scrollbars
       .for_axis_mut(axis)
       .press(cursor_position, &geometry);
+
     self.apply_pointer_update(state, update, &geometry, now)
   }
 
@@ -275,22 +311,37 @@ impl Scrollbars {
     cursor: iced::advanced::mouse::Cursor,
   ) -> Effect {
     let now = Instant::now();
+    let cursor_position = cursor.position();
     let state = tree.state.downcast_mut::<State>();
-    let axis = scrollbar::Axis::Vertical;
-    let geometry = self.geometry(state, axis, widget_bounds);
-    let scrollbar_state = state.scrollbars.for_axis_mut(axis);
 
-    let update = if scrollbar_state.is_dragging() {
-      let Some(cursor_position) = cursor.position() else {
+    if let Some(axis) = self.dragging_axis(state) {
+      let Some(cursor_position) = cursor_position else {
         return Effect::none();
       };
 
-      scrollbar_state.drag_to(cursor_position, &geometry)
-    } else {
-      scrollbar_state.cursor_moved(cursor.position(), &geometry, now)
-    };
+      let geometry = self.axis_geometry(state, axis, widget_bounds);
+      let update = state
+        .scrollbars
+        .for_axis_mut(axis)
+        .drag_to(cursor_position, &geometry);
 
-    self.apply_pointer_update(state, update, &geometry, now)
+      return self.apply_pointer_update(state, update, &geometry, now);
+    }
+
+    let mut effect = Effect::none();
+
+    for axis in [scrollbar::Axis::Horizontal, scrollbar::Axis::Vertical] {
+      let geometry = self.axis_geometry(state, axis, widget_bounds);
+      let update =
+        state
+          .scrollbars
+          .for_axis_mut(axis)
+          .cursor_moved(cursor_position, &geometry, now);
+
+      effect.merge(self.apply_pointer_update(state, update, &geometry, now));
+    }
+
+    effect
   }
 
   pub(super) fn on_cursor_left(
@@ -300,15 +351,19 @@ impl Scrollbars {
   ) -> Effect {
     let now = Instant::now();
     let state = tree.state.downcast_mut::<State>();
-    let axis = scrollbar::Axis::Vertical;
-    let geometry = self.geometry(state, axis, widget_bounds);
+    let mut effect = Effect::none();
 
-    let update = state
-      .scrollbars
-      .for_axis_mut(axis)
-      .cursor_moved(None, &geometry, now);
+    for axis in [scrollbar::Axis::Horizontal, scrollbar::Axis::Vertical] {
+      let geometry = self.axis_geometry(state, axis, widget_bounds);
+      let update = state
+        .scrollbars
+        .for_axis_mut(axis)
+        .cursor_moved(None, &geometry, now);
 
-    self.apply_pointer_update(state, update, &geometry, now)
+      effect.merge(self.apply_pointer_update(state, update, &geometry, now));
+    }
+
+    effect
   }
 
   pub(super) fn on_release(
@@ -319,13 +374,18 @@ impl Scrollbars {
   ) -> Effect {
     let now = Instant::now();
     let state = tree.state.downcast_mut::<State>();
-    let axis = scrollbar::Axis::Vertical;
-    let geometry = self.geometry(state, axis, widget_bounds);
-    let update = state
-      .scrollbars
-      .for_axis_mut(axis)
-      .release(cursor.position(), &geometry);
+    let mut effect = Effect::none();
 
-    self.apply_pointer_update(state, update, &geometry, now)
+    for axis in [scrollbar::Axis::Horizontal, scrollbar::Axis::Vertical] {
+      let geometry = self.axis_geometry(state, axis, widget_bounds);
+      let update = state
+        .scrollbars
+        .for_axis_mut(axis)
+        .release(cursor.position(), &geometry);
+
+      effect.merge(self.apply_pointer_update(state, update, &geometry, now));
+    }
+
+    effect
   }
 }
