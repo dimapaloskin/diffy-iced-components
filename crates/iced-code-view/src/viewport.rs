@@ -100,6 +100,10 @@ impl Viewport {
     offset_bounds(self.text.content_bounds, widget_bounds)
   }
 
+  pub(crate) fn absolute_text_bounds(&self, widget_bounds: iced::Rectangle) -> iced::Rectangle {
+    offset_bounds(self.text.bounds, widget_bounds)
+  }
+
   pub(crate) fn scroll_viewport_size(&self) -> iced::Size {
     self.text.content_bounds.size()
   }

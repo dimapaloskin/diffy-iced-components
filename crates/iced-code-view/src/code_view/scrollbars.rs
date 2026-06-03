@@ -26,6 +26,18 @@ impl Scrollbars {
     self.metrics.edge_reserve()
   }
 
+  // TODO: replace this adapter override with per-axis scrollbar metrics.
+  fn metrics_for_axis(&self, axis: scrollbar::Axis) -> scrollbar::Metrics {
+    match axis {
+      scrollbar::Axis::Vertical => self.metrics,
+      scrollbar::Axis::Horizontal => scrollbar::Metrics {
+        track_inset_start: 0.0,
+        track_inset_end: 0.0,
+        ..self.metrics
+      },
+    }
+  }
+
   pub(super) fn geometry(
     &self,
     state: &State,
@@ -36,7 +48,7 @@ impl Scrollbars {
       .scroll
       .scrollbar_snapshot(axis, state.viewport.scroll_viewport_size());
 
-    scrollbar::Geometry::new(snapshot, placement_bounds, self.metrics)
+    scrollbar::Geometry::new(snapshot, placement_bounds, self.metrics_for_axis(axis))
   }
 
   fn axis_geometry(
@@ -57,7 +69,7 @@ impl Scrollbars {
   ) -> iced::Rectangle {
     match axis {
       scrollbar::Axis::Vertical => widget_bounds,
-      scrollbar::Axis::Horizontal => state.viewport.absolute_text_content_bounds(widget_bounds),
+      scrollbar::Axis::Horizontal => state.viewport.absolute_text_bounds(widget_bounds),
     }
   }
 
