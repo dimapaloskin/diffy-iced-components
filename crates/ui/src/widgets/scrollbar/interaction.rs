@@ -1,13 +1,15 @@
 use iced::Point;
-use iced::time::Instant;
+use iced::time::{Duration, Instant};
 
 use super::behavior;
 use super::{Action, Axis, Geometry, Status, ThumbGeometry, TrackPressRegion};
 
-#[derive(Debug, Default, Clone, Copy, PartialEq)]
+#[derive(Debug, Default, Clone, Copy)]
 pub struct State {
   interaction: Interaction,
   last_activity_at: Option<Instant>,
+  reveal_started_at: Option<Instant>,
+  last_opacity: f32,
 }
 
 impl State {
@@ -19,6 +21,14 @@ impl State {
     }
   }
 
+  pub fn opacity(&self, behavior: behavior::Behavior) -> f32 {
+    if behavior.visibility.always_visible {
+      return 1.0;
+    }
+
+    self.last_opacity
+  }
+
   pub fn is_visible(&self, geometry: &Geometry, behavior: behavior::Behavior) -> bool {
     if !geometry.is_renderable() {
       return false;
@@ -28,15 +38,7 @@ impl State {
       return true;
     }
 
-    if self.last_activity_at.is_some() {
-      return true;
-    }
-
-    match self.interaction {
-      Interaction::Dragging { .. } => true,
-      Interaction::Hover => behavior.visibility.reveal_on_hover,
-      Interaction::Idle => false,
-    }
+    self.last_opacity > 0.0
   }
 
   pub fn interaction(&self) -> Interaction {
@@ -78,6 +80,7 @@ impl State {
     &mut self,
     cursor_position: Option<Point>,
     geometry: &Geometry,
+    behavior: behavior::Behavior,
     now: Instant,
   ) -> Update {
     if self.is_dragging() {
@@ -93,6 +96,10 @@ impl State {
 
     self.interaction = next_interaction;
 
+    if self.should_start_reveal_on_hover(previous_interaction, next_interaction, behavior) {
+      self.reveal_started_at = Some(now);
+    }
+
     if matches!(previous_interaction, Interaction::Hover)
       && matches!(next_interaction, Interaction::Idle)
       && self.last_activity_at.is_some()
@@ -106,6 +113,19 @@ impl State {
       request_redraw: true,
       request_redraw_at: None,
     }
+  }
+
+  fn should_start_reveal_on_hover(
+    &self,
+    previous: Interaction,
+    next: Interaction,
+    behavior: behavior::Behavior,
+  ) -> bool {
+    matches!(next, Interaction::Hover)
+      && !matches!(previous, Interaction::Hover)
+      && behavior.visibility.reveal_on_hover
+      && self.last_opacity <= 0.0
+      && self.reveal_started_at.is_none()
   }
 
   pub fn drag_to(&self, cursor_position: Point, geometry: &Geometry) -> Update {
@@ -139,6 +159,12 @@ impl State {
   pub fn note_activity(&mut self, now: Instant) -> Update {
     self.last_activity_at = Some(now);
 
+    if self.last_opacity <= 0.0 && self.reveal_started_at.is_none() {
+      self.reveal_started_at = Some(now);
+    } else {
+      self.reveal_started_at = None;
+    }
+
     Update {
       request_redraw: true,
       ..Update::ignored()
@@ -147,35 +173,50 @@ impl State {
 
   pub fn redraw_requested(&mut self, now: Instant, behavior: behavior::Behavior) -> Update {
     if behavior.visibility.always_visible {
+      self.last_opacity = 1.0;
       return Update::ignored();
     }
 
-    let Some(last_activity_at) = self.last_activity_at else {
-      return Update::ignored();
+    let fade_in_active = self.reveal_started_at.is_some();
+
+    let hover_can_hold_or_reveal = match self.interaction {
+      Interaction::Dragging { .. } => true,
+      Interaction::Hover => {
+        behavior.visibility.reveal_on_hover
+          || self.last_opacity > 0.0
+          || self.last_activity_at.is_some()
+          || fade_in_active
+      }
+      Interaction::Idle => false,
     };
 
-    let hide_at = last_activity_at + behavior.visibility.hide_delay;
-
-    if now < hide_at {
-      return Update {
-        request_redraw_at: Some(hide_at),
-        ..Update::ignored()
-      };
-    }
-
-    if matches!(
-      self.interaction,
-      Interaction::Hover | Interaction::Dragging { .. }
-    ) {
+    if hover_can_hold_or_reveal {
       self.last_activity_at = Some(now);
+    }
 
+    self.update_opacity(now, behavior);
+
+    if self.last_opacity <= 0.0 && self.reveal_started_at.is_none() {
+      self.last_activity_at = None;
+      return Update::ignored();
+    }
+
+    if self.reveal_started_at.is_some() {
       return Update {
-        request_redraw_at: Some(now + behavior.visibility.hide_delay),
+        request_redraw: true,
         ..Update::ignored()
       };
     }
 
-    self.last_activity_at = None;
+    if let Some(last_activity_at) = self.last_activity_at {
+      let fade_out_start = last_activity_at + behavior.motion.fade_out_delay;
+      if now < fade_out_start {
+        return Update {
+          request_redraw_at: Some(fade_out_start),
+          ..Update::ignored()
+        };
+      }
+    }
 
     Update {
       request_redraw: true,
@@ -197,6 +238,43 @@ impl State {
         }
       }
     }
+  }
+
+  pub fn update_opacity(&mut self, now: Instant, behavior: behavior::Behavior) -> f32 {
+    self.last_opacity = self.compute_opacity(now, behavior);
+
+    if self.last_opacity >= 1.0 {
+      self.reveal_started_at = None;
+    }
+
+    self.last_opacity
+  }
+
+  fn compute_opacity(&self, now: Instant, behavior: behavior::Behavior) -> f32 {
+    if behavior.visibility.always_visible {
+      return 1.0;
+    }
+
+    // fade-in
+    if let Some(reveal_started_at) = self.reveal_started_at {
+      let progress = fade_progress(now, reveal_started_at, behavior.motion.fade_in_duration);
+      if progress < 1.0 {
+        return progress;
+      }
+    }
+
+    // fade out
+    if let Some(last_activity_at) = self.last_activity_at {
+      let fade_out_start = last_activity_at + behavior.motion.fade_out_delay;
+      if now < fade_out_start {
+        return 1.0;
+      }
+
+      let progress = fade_progress(now, fade_out_start, behavior.motion.fade_out_duration);
+      return 1.0 - progress;
+    }
+
+    0.0
   }
 
   fn hover_interaction(cursor_position: Option<Point>, geometry: &Geometry) -> Interaction {
@@ -297,6 +375,16 @@ impl Update {
       request_redraw_at: None,
     }
   }
+}
+
+fn fade_progress(now: Instant, start: Instant, duration: Duration) -> f32 {
+  let total_sec = duration.as_secs_f32();
+  if total_sec <= 0.0 {
+    return 1.0;
+  }
+
+  let elapsed = now.duration_since(start).as_secs_f32();
+  (elapsed / total_sec).clamp(0.0, 1.0)
 }
 
 #[cfg(test)]

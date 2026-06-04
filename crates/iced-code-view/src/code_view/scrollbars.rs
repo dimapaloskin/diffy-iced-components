@@ -145,7 +145,13 @@ impl Scrollbars {
     }
 
     renderer.with_layer(layer_bounds, |renderer| {
-      scrollbar::draw(renderer, &geometry, &style, scrollbar_state.status(), 1.0);
+      scrollbar::draw(
+        renderer,
+        &geometry,
+        &style,
+        scrollbar_state.status(),
+        scrollbar_state.opacity(self.behavior),
+      );
     });
   }
 
@@ -344,11 +350,12 @@ impl Scrollbars {
 
     for axis in [scrollbar::Axis::Horizontal, scrollbar::Axis::Vertical] {
       let geometry = self.axis_geometry(state, axis, widget_bounds);
-      let update =
-        state
-          .scrollbars
-          .for_axis_mut(axis)
-          .cursor_moved(cursor_position, &geometry, now);
+      let update = state.scrollbars.for_axis_mut(axis).cursor_moved(
+        cursor_position,
+        &geometry,
+        self.behavior,
+        now,
+      );
 
       effect.merge(self.apply_pointer_update(state, update, &geometry, now));
     }
@@ -367,10 +374,11 @@ impl Scrollbars {
 
     for axis in [scrollbar::Axis::Horizontal, scrollbar::Axis::Vertical] {
       let geometry = self.axis_geometry(state, axis, widget_bounds);
-      let update = state
-        .scrollbars
-        .for_axis_mut(axis)
-        .cursor_moved(None, &geometry, now);
+      let update =
+        state
+          .scrollbars
+          .for_axis_mut(axis)
+          .cursor_moved(None, &geometry, self.behavior, now);
 
       effect.merge(self.apply_pointer_update(state, update, &geometry, now));
     }

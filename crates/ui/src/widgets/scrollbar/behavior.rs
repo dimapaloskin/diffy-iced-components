@@ -1,8 +1,9 @@
 use iced::time::Duration;
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy)]
 pub struct Behavior {
   pub visibility: Visibility,
+  pub motion: Motion,
 }
 
 impl Behavior {
@@ -18,24 +19,30 @@ impl Behavior {
 
   pub const fn auto_hide_after(mut self, duration: Duration) -> Self {
     self.visibility.always_visible = false;
-    self.visibility.hide_delay = duration;
+    self.motion.fade_out_delay = duration;
     self
   }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy)]
 pub struct Visibility {
   pub always_visible: bool,
   pub reveal_on_hover: bool,
-  pub hide_delay: Duration,
 }
 
-impl Default for Visibility {
+#[derive(Debug, Clone, Copy)]
+pub struct Motion {
+  pub fade_in_duration: Duration,
+  pub fade_out_duration: Duration,
+  pub fade_out_delay: Duration,
+}
+
+impl Default for Motion {
   fn default() -> Self {
     Self {
-      always_visible: false,
-      reveal_on_hover: false,
-      hide_delay: Duration::from_millis(900),
+      fade_in_duration: Duration::from_millis(200),
+      fade_out_duration: Duration::from_millis(300),
+      fade_out_delay: Duration::from_millis(1200),
     }
   }
 }
